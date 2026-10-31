@@ -6,7 +6,7 @@ not live rate: Google publishes observations with delay.
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 SERVICES = {
@@ -58,10 +58,10 @@ class GoogleProvider:
         self.limits = {}
 
     def fetch(self, accounts, entries):
-        from google.oauth2 import service_account
         from google.auth.transport.requests import AuthorizedSession
+        from google.oauth2 import service_account
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         midnight = now.astimezone(ZoneInfo("America/Los_Angeles")).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
@@ -143,9 +143,7 @@ class GoogleProvider:
                     while True:
                         params = {
                             "filter": f'metric.type="serviceruntime.googleapis.com/quota/rate/net_usage" AND resource.labels.service="{service}"',
-                            "interval.startTime": midnight.astimezone(
-                                timezone.utc
-                            ).isoformat(),
+                            "interval.startTime": midnight.astimezone(UTC).isoformat(),
                             "interval.endTime": now.isoformat(),
                             "pageSize": 10000,
                             "view": "FULL",

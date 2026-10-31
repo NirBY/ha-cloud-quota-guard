@@ -2,8 +2,9 @@
 
 import json
 from pathlib import Path
-from PIL import Image
+
 import yaml
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT = ROOT / "custom_components/quota_guard"

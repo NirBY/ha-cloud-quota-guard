@@ -1,6 +1,7 @@
 """Generate original, vector-style Cloud Quota Guard brand images."""
 
 from pathlib import Path
+
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]

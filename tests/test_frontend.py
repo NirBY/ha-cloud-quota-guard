@@ -1,10 +1,10 @@
 """The bundled frontend route must survive config entry reloads."""
 
 import importlib.util
-from pathlib import Path
 import sys
 import types
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 

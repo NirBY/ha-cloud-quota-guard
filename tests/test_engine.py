@@ -1,6 +1,6 @@
 import importlib.util
 import unittest
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location(
@@ -12,7 +12,7 @@ spec.loader.exec_module(engine)
 
 
 class TestQuota(unittest.TestCase):
-    now = datetime(2026, 10, 30, tzinfo=timezone.utc)
+    now = datetime(2026, 10, 30, tzinfo=UTC)
 
     def sample(self, used, **kw):
         return dict(

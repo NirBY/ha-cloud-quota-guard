@@ -4,7 +4,7 @@ import importlib.util
 import sys
 import types
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -54,7 +54,7 @@ module("homeassistant.helpers.storage").Store = Store
 module("homeassistant.helpers.aiohttp_client").async_get_clientsession = lambda _: None
 module("homeassistant.loader").async_get_integration = AsyncMock()
 dt = module("homeassistant.util.dt")
-dt.utcnow = lambda: datetime.now(timezone.utc)
+dt.utcnow = lambda: datetime.now(UTC)
 dt.parse_datetime = datetime.fromisoformat
 path = Path(__file__).resolve().parents[1] / "custom_components/quota_guard"
 spec = importlib.util.spec_from_file_location(
