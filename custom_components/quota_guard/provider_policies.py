@@ -14,73 +14,73 @@ def policy_for(domain, data=None, options=None):
         custom = endpoint.rstrip("/") != "https://api.telegram.org"
         return {
             "title": "Telegram Bot",
-            "headline": "1 הודעה לשנייה בצ׳אט",
-            "summary": "מגבלות קצב, טקסט וקבצים מתועדות. אין חיבור למונה שליחות בפועל.",
-            "scope": "Bot API רגיל בענן"
+            "headline": "1 message per second per chat",
+            "summary": "Documented rate, text and file limits. No actual send counter is connected.",
+            "scope": "Standard cloud Bot API"
             if not custom
-            else "שרת Bot API מותאם — יש לבדוק את מגבלות השרת",
+            else "Custom Bot API server — check its server limits",
             "notes": [
-                "המלצת קצב לצ׳אט בודד: להימנע מיותר מהודעה אחת בשנייה; חריגה עשויה להחזיר 429.",
-                "20 הודעות בדקה הן מגבלת קבוצה; אין להחיל מספר זה אוטומטית על כל ערוץ.",
-                "קצב שידור חינמי כולל: בערך 30 הודעות בשנייה. שידורים בתשלום הם מסלול נפרד ואינם מופעלים כאן.",
-                "מגבלות גודל תלויות בסוג הקובץ ובשיטת השליחה. שרת Bot API מקומי עשוי להשתמש במגבלות אחרות.",
-                "אלה מגבלות לכל חלון זמן או בקשה, ולא מכסה יומית מצטברת. אין כיבוי אוטומטי המבוסס עליהן כאן.",
+                "Per-chat guidance: avoid more than one message per second; exceeding this may return 429.",
+                "20 messages per minute is a group limit; do not automatically apply it to every channel.",
+                "Free bulk broadcast rate: about 30 messages per second. Paid broadcasts are separate and are not enabled here.",
+                "File limits depend on media type and upload method. A local Bot API server may have different limits.",
+                "These limits apply per time window or request, not as a cumulative daily allowance. No automatic cutoff is based on them here.",
             ],
             "limits": [
                 {
-                    "name": "קצב לצ׳אט בודד",
+                    "name": "Per-chat rate",
                     "value": "1",
-                    "unit": "הודעה לשנייה",
-                    "scope": "הנחיית קצב לצ׳אט",
+                    "unit": "message per second",
+                    "scope": "Per-chat rate guidance",
                     "source": TELEGRAM_FAQ,
                 },
                 {
-                    "name": "שליחה לקבוצה",
+                    "name": "Send to group",
                     "value": "20",
-                    "unit": "הודעות בדקה",
-                    "scope": "לכל קבוצה",
+                    "unit": "messages per minute",
+                    "scope": "Per group",
                     "source": TELEGRAM_FAQ,
                 },
                 {
-                    "name": "שידור חינמי כולל",
+                    "name": "Free bulk broadcast",
                     "value": "≈30",
-                    "unit": "הודעות בשנייה",
-                    "scope": "כל הצ׳אטים בבוט יחד",
+                    "unit": "messages per second",
+                    "scope": "All chats for the bot combined",
                     "source": TELEGRAM_FAQ,
                 },
                 {
-                    "name": "אורך הודעת טקסט",
+                    "name": "Text message length",
                     "value": "4,096",
-                    "unit": "תווים",
-                    "scope": "לאחר פענוח entities",
+                    "unit": "characters",
+                    "scope": "After entity parsing",
                     "source": "https://core.telegram.org/bots/api#sendmessage",
                 },
                 {
-                    "name": "העלאת תמונה",
+                    "name": "Upload photo",
                     "value": "10",
                     "unit": "MB",
-                    "scope": "multipart/form-data · תמונה חדשה",
+                    "scope": "multipart/form-data · new photo",
                     "source": TELEGRAM_API,
                 },
                 {
-                    "name": "העלאת קובץ אחר",
+                    "name": "Upload other file",
                     "value": "50",
                     "unit": "MB",
-                    "scope": "multipart/form-data · קובץ חדש",
+                    "scope": "multipart/form-data · new file",
                     "source": TELEGRAM_API,
                 },
                 {
-                    "name": "שליחה באמצעות URL",
+                    "name": "Send using URL",
                     "value": "5 / 20",
                     "unit": "MB",
-                    "scope": "תמונה / קובץ אחר",
+                    "scope": "Photo / other file",
                     "source": TELEGRAM_API,
                 },
                 {
-                    "name": "הורדת קובץ לבוט",
+                    "name": "Download file to bot",
                     "value": "20",
                     "unit": "MB",
-                    "scope": "getFile בשרת הרגיל",
+                    "scope": "getFile on the standard server",
                     "source": "https://core.telegram.org/bots/api#getfile",
                 },
             ],
@@ -90,39 +90,39 @@ def policy_for(domain, data=None, options=None):
         sharing = "user_code" in data or "terminal_id" in data
         return {
             "title": "Tuya",
-            "headline": "מגבלות לפי API",
-            "summary": "Sharing SDK: מגבלת החשבון הפעילה אינה מאומתת."
+            "headline": "Limits vary by API",
+            "summary": "Sharing SDK: the active account limit is not verified."
             if sharing
-            else "Cloud OpenAPI: כל endpoint מוגבל בנפרד לכל פרויקט.",
-            "scope": "Tuya Sharing SDK — מגבלות Cloud OpenAPI הן מידע ייחוס בלבד"
+            else "Cloud OpenAPI: each endpoint has a separate per-project limit.",
+            "scope": "Tuya Sharing SDK — Cloud OpenAPI limits are reference only"
             if sharing
-            else "Cloud OpenAPI — לכל endpoint ולכל פרויקט",
+            else "Cloud OpenAPI — per endpoint and project",
             "notes": [
-                "אין מספר QPS יחיד לכל Tuya ואין מכסה יומית שניתן להסיק מתקרת בקשות בשנייה.",
-                "המספרים להלן הם מגבלות Cloud OpenAPI מהתיעוד המקושר, ולא מדידת שימוש בחשבון.",
-                "האינטגרציה הרשמית המותקנת משתמשת ב־Sharing SDK; אין להחיל עליה את מספרי Cloud OpenAPI כהגנת חשבון."
+                "There is no single Tuya-wide QPS limit. Requests per second do not establish a daily allowance.",
+                "The limits below come from the linked Cloud OpenAPI documentation; they are not measured account usage.",
+                "The installed official integration uses Sharing SDK; Cloud OpenAPI numbers must not be treated as account protection for it."
                 if sharing
-                else "יש להתאים את המגבלה ל־endpoint שבאמת נקרא ולפרויקט הרלוונטי.",
+                else "Match the limit to the endpoint actually called and the relevant project.",
             ],
             "limits": [
                 {
-                    "name": "שאילתת מאפייני מכשיר",
+                    "name": "Query device properties",
                     "value": "50",
-                    "unit": "בקשות בשנייה",
+                    "unit": "requests per second",
                     "scope": "GET /v2.0/cloud/thing/{device_id}/shadow/properties",
                     "source": TUYA_DOC,
                 },
                 {
-                    "name": "שאילתת מצב מכשיר",
+                    "name": "Query device state",
                     "value": "5",
-                    "unit": "בקשות בשנייה",
+                    "unit": "requests per second",
                     "scope": "GET /v2.0/cloud/thing/{device_id}/state",
                     "source": TUYA_DOC,
                 },
                 {
-                    "name": "הפעלת פעולה",
+                    "name": "Invoke action",
                     "value": "4",
-                    "unit": "בקשות בשנייה",
+                    "unit": "requests per second",
                     "scope": "POST /v2.0/cloud/thing/{device_id}/shadow/actions",
                     "source": TUYA_DOC,
                 },
@@ -132,25 +132,25 @@ def policy_for(domain, data=None, options=None):
     if domain == "xiaomi_miot":
         mode = options.get("conn_mode", data.get("conn_mode"))
         labels = {
-            "auto": "אוטומטי — LAN כאשר נתמך, וענן לפי הצורך",
-            "local": "חיבור מקומי",
-            "cloud": "חיבור ענן",
+            "auto": "Automatic — LAN where supported, cloud as needed",
+            "local": "Local connection",
+            "cloud": "Cloud connection",
         }
         return {
             "title": "Xiaomi MIoT",
             "headline": {
-                "auto": "Auto · מקומי וענן",
-                "local": "Local · חיבור מקומי",
-                "cloud": "Cloud · חיבור ענן",
-            }.get(mode, "הגדרות MIoT"),
-            "summary": "לא נמצאה תקרת בקשות מספרית מאומתת. תדירות התשאול אינה מכסה.",
-            "scope": labels.get(mode, "מצב החיבור לא נקבע ברמת הרשומה"),
+                "auto": "Auto · local and cloud",
+                "local": "Local · local connection",
+                "cloud": "Cloud · cloud connection",
+            }.get(mode, "MIoT settings"),
+            "summary": "No verified numeric request limit found. Polling frequency is not a quota.",
+            "scope": labels.get(mode, "Connection mode is not set at entry level"),
             "connection_mode": mode,
             "notes": [
-                "Auto אינו Cloud בלבד: האינטגרציה מעדיפה LAN במכשירים נתמכים ומשתמשת בענן לפי הצורך.",
-                "Local אינו מבטיח שכל תקשורת החשבון מקומית; חלק מהתכונות עשויות להשתמש בענן.",
-                "לא קובעים תקרה יומית או אחוז ניצול לפי מספר המכשירים או לפי polling של 30/60 שניות.",
-                "לא אותר במקורות שאומתו מספר רשמי אחיד למגבלת החשבון. שגיאת 429 כשלעצמה אינה מגלה את התקרה.",
+                "Auto is not cloud-only: the integration prefers LAN on supported devices and uses cloud as needed.",
+                "Local mode does not guarantee all account communication is local; some features may use cloud.",
+                "Do not infer a daily limit or usage percentage from device count or a 30/60-second polling interval.",
+                "No uniform official numeric account limit was found in the verified sources. A 429 response alone does not reveal the limit.",
             ],
             "limits": [],
             "source": XIAOMI_DOC,

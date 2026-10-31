@@ -17,6 +17,7 @@ from homeassistant.util import dt as dt_util
 
 from .engine import crossings, evaluate
 from .google_provider import GoogleProvider
+from .localization import translate
 from .provider_policies import policy_for
 
 DOMAIN = "quota_guard"
@@ -273,15 +274,23 @@ class Guard:
                         m["status"] = "no_activity_reported"
                         self.clear_data_alert(id, m)
                         continue
-                    message = f"{cfg['name']}: המדידה חסרה או ישנה; לא ניתן לאמת הגנה"
+                    message_key = "{name}: measurement is missing or stale; protection cannot be verified"
                     if (
                         m.get("provider_error")
                         == "Google has not reported any usage samples for this day; not assumed zero"
                     ):
-                        message = f"{cfg['name']}: Google עדיין לא פרסם דגימות שימוש ליום המכסה הנוכחי. ממתין לנתוני הספק; אין להסיק שהשימוש אפס."
+                        message_key = "{name}: Google has not published usage samples for the current quota day. Waiting for provider data; do not assume zero usage."
                     # Persistent notifications may be forwarded to Telegram. Do not
                     # recreate unchanged messages on each poll or after a restart.
-                    if m.get("data_alert_message") != message:
+                    message = self.text(message_key, name=self.metric_name(cfg))
+                    # Stable semantic identity prevents language changes and restarts
+                    # from re-sending an already active alert. Migrate the old latch.
+                    previous_key = m.get("data_alert_key")
+                    already_alerted = previous_key == message_key or (
+                        previous_key is None and bool(m.get("data_alert_message"))
+                    )
+                    m["data_alert_key"] = message_key
+                    if not already_alerted:
                         m["data_alert_message"] = message
                         if old_status not in (None, "unknown", "stale"):
                             await self.event(id, "data_unavailable", None, message)
@@ -289,7 +298,7 @@ class Guard:
                             persistent_notification.async_create(
                                 self.hass,
                                 message,
-                                title="מכסות שירותים",
+                                title=self.text("Cloud service quotas"),
                                 notification_id=f"quota_guard_{id}_data_unavailable",
                             )
                     continue
@@ -318,7 +327,12 @@ class Guard:
                             id,
                             "threshold",
                             threshold,
-                            f"{cfg['name']}: זוהה שימוש של {pct:.2f}% — סף {threshold}%",
+                            self.text(
+                                "{name}: detected usage {percent:.2f}% — threshold {threshold}%",
+                                name=self.metric_name(cfg),
+                                percent=pct,
+                                threshold=threshold,
+                            ),
                         )
                 m["last_percent"] = pct
                 if pct >= 95 and cfg["enforce"]:
@@ -345,7 +359,10 @@ class Guard:
                     if result != m.get("cutoff_result"):
                         m["cutoff_result"] = result
                         await self.event(
-                            id, "cutoff", 95, "כיבוי: " + ", ".join(result.values())
+                            id,
+                            "cutoff",
+                            95,
+                            self.text("Cutoff: ") + ", ".join(result.values()),
                         )
             await self.store.async_save(self.data)
             for listener in self.listeners:
@@ -357,6 +374,7 @@ class Guard:
             self.hass, f"quota_guard_{id}_data_unavailable"
         )
         metric.pop("data_alert_message", None)
+        metric.pop("data_alert_key", None)
 
     async def github_samples(self, now):
         """Existing GitHub credentials stay in HA; read the provider's real counter."""
@@ -453,6 +471,15 @@ class Guard:
                 m.pop("sample", None)
             m.update(row)
 
+    def text(self, message, **values):
+        """Use the Home Assistant system language; default to English."""
+        language = getattr(getattr(self.hass, "config", None), "language", "en")
+        return translate(message, language, **values)
+
+    def metric_name(self, config):
+        name = config["name"]
+        return self.text(name) if config.get("builtin_name") else name
+
     async def event(self, id, kind, threshold, message):
         sample = self.data["metrics"][id].get("sample", {})
         item = {
@@ -472,6 +499,6 @@ class Guard:
         persistent_notification.async_create(
             self.hass,
             message,
-            title="מכסות שירותים",
+            title=self.text("Cloud service quotas"),
             notification_id=f"quota_guard_{id}_{kind}",
         )

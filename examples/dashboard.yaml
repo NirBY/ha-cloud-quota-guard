@@ -1,0 +1,10 @@
+# Reusable Lovelace dashboard template. English is the fallback language.
+# Set language to en for English, he for Hebrew, or auto to follow your profile.
+title: Cloud Quotas
+views:
+  - title: Quotas
+    path: quotas
+    type: panel
+    cards:
+      - type: custom:quota-guard-card
+        language: auto

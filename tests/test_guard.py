@@ -194,6 +194,14 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             await self.g.tick()
             self.assertEqual(count, len(self.g.data["events"]))
             self.assertEqual(pn.async_create.call_count, 1)
+            # Profile/system language changes must not recreate an active alert.
+            self.g.hass.config = types.SimpleNamespace(language="he")
+            await self.g.tick()
+            self.assertEqual(pn.async_create.call_count, 1)
+            # Older versions only stored the message; migrate without alerting.
+            m.pop("data_alert_key")
+            await self.g.tick()
+            self.assertEqual(pn.async_create.call_count, 1)
             # The latch lives in persisted metric data, not transient manager state.
             self.g.data = json.loads(json.dumps(self.g.data))
             await self.g.tick()

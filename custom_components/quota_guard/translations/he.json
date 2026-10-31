@@ -13,86 +13,86 @@
   },
   "services": {
     "configure": {
-      "name": "Configure quota",
-      "description": "Register a verified measurement source and target integrations.",
+      "name": "הגדרת מכסה",
+      "description": "רישום מקור מדידה מאומת ואינטגרציות יעד.",
       "fields": {
         "id": {
-          "name": "Metric ID",
-          "description": "Stable lowercase identifier (letters, digits and underscores)."
+          "name": "מזהה מדד",
+          "description": "מזהה קבוע באותיות לטיניות קטנות, ספרות וקווים תחתונים."
         },
         "name": {
-          "name": "Name",
-          "description": "Human-readable quota name."
+          "name": "שם",
+          "description": "שם תיאורי למכסה."
         },
         "entry_ids": {
-          "name": "Target integration IDs",
-          "description": "Config entry IDs to disable at the cutoff; cannot target Quota Guard itself."
+          "name": "מזהי אינטגרציות יעד",
+          "description": "מזהי רשומות שיושבתו בסף הכיבוי. לא ניתן לבחור את המנטר עצמו."
         },
         "kind": {
-          "name": "Quota type",
-          "description": "Distinguish a rate limit, free allowance, or monetary budget."
+          "name": "סוג מכסה",
+          "description": "הבחנה בין מגבלת קצב, מכסה חינמית ותקציב כספי."
         },
         "source": {
-          "name": "Verified source",
-          "description": "Provider documentation URL or a clear description of the usage source."
+          "name": "מקור מאומת",
+          "description": "קישור לתיעוד הספק או תיאור ברור של מקור השימוש."
         },
         "unit": {
-          "name": "Unit",
-          "description": "For example requests, characters, or USD."
+          "name": "יחידה",
+          "description": "לדוגמה בקשות, תווים או USD."
         },
         "usage_entity": {
-          "name": "Usage sensor",
-          "description": "Current-period usage sensor with period and source timestamp attributes."
+          "name": "חיישן שימוש",
+          "description": "חיישן שימוש לתקופה הנוכחית עם מאפייני תקופה וחותמת זמן של המקור."
         },
         "limit_entity": {
-          "name": "Limit sensor",
-          "description": "Optional sensor exposing the effective allowance."
+          "name": "חיישן מגבלה",
+          "description": "חיישן אופציונלי המציג את המגבלה הפעילה."
         },
         "limit": {
-          "name": "Fixed allowance",
-          "description": "A verified allowance if no limit sensor is available."
+          "name": "מכסה קבועה",
+          "description": "מכסה מאומתת כאשר אין חיישן מגבלה."
         },
         "period_attribute": {
-          "name": "Period attribute",
-          "description": "Usage sensor attribute containing the provider period ID."
+          "name": "מאפיין תקופה",
+          "description": "מאפיין בחיישן השימוש המכיל את מזהה תקופת הספק."
         },
         "timestamp_attribute": {
-          "name": "Timestamp attribute",
-          "description": "Usage sensor attribute with the timezone-aware source timestamp."
+          "name": "מאפיין חותמת זמן",
+          "description": "מאפיין בחיישן השימוש המכיל חותמת זמן של המקור כולל אזור זמן."
         },
         "max_age": {
-          "name": "Maximum age",
-          "description": "Seconds until a measurement is considered stale (30–86400)."
+          "name": "גיל מדידה מרבי",
+          "description": "מספר השניות עד שמדידה נחשבת ישנה (30–86400)."
         },
         "enforce": {
-          "name": "Disable at 95%",
-          "description": "Disable explicitly mapped integrations at 95%; never automatically re-enable them."
+          "name": "השבתה ב־95%",
+          "description": "השבתת האינטגרציות שמופו במפורש ב־95%. אין הפעלה מחדש אוטומטית."
         }
       }
     },
     "report": {
-      "name": "Report measurement",
-      "description": "Submit a verified quota measurement. Administrator access is required.",
+      "name": "דיווח מדידה",
+      "description": "שליחת מדידת מכסה מאומתת. נדרשת הרשאת מנהל.",
       "fields": {
         "id": {
-          "name": "Metric ID",
-          "description": "ID of a metric previously registered with configure."
+          "name": "מזהה מדד",
+          "description": "מזהה מדד שנרשם קודם בפעולת ההגדרה."
         },
         "used": {
-          "name": "Used",
-          "description": "Verified consumption in the current provider period."
+          "name": "נוצלו",
+          "description": "שימוש מאומת בתקופת הספק הנוכחית."
         },
         "limit": {
-          "name": "Allowance",
-          "description": "Verified effective allowance for this period."
+          "name": "מכסה",
+          "description": "המכסה הפעילה המאומתת לתקופה זו."
         },
         "period": {
-          "name": "Period",
-          "description": "Provider period identifier; changes reset threshold notification latches."
+          "name": "תקופה",
+          "description": "מזהה תקופת הספק. שינוי מזהה מאפס את התראות הספים."
         },
         "timestamp": {
-          "name": "Source timestamp",
-          "description": "Timezone-aware ISO 8601 timestamp of the provider measurement."
+          "name": "חותמת זמן של המקור",
+          "description": "חותמת זמן ISO 8601 של מדידת הספק, כולל אזור זמן."
         }
       }
     }

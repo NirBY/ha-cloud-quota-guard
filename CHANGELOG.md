@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- English-default dashboard, provider descriptions and notifications.
+- Hebrew translations, RTL layout, localized dates and numbers.
+- Automatic Home Assistant language selection and explicit card language override.
+- Reusable dashboard YAML template and stable alert deduplication across language changes.
+
+
 ## 0.3.0 — 2026-10-31
 
 - Distinguish a successful empty Google usage query from a monitoring outage.

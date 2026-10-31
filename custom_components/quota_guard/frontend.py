@@ -6,7 +6,7 @@ from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 
 CARD_PATH = "/quota_guard/quota-guard-card.js"
-CARD_URL = CARD_PATH + "?v=0.3.0"
+CARD_URL = CARD_PATH + "?v=0.4.0"
 
 
 async def async_register_frontend(hass):

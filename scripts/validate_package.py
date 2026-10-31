@@ -32,3 +32,13 @@ for file in COMPONENT.rglob("*.json"):
 print(
     "Package metadata, action translations, bundled frontend and brand icons verified"
 )
+
+# A stale generated bundle must fail validation rather than ship mixed languages.
+catalog = json.loads((COMPONENT / "languages/he.json").read_text(encoding="utf-8"))
+card = (COMPONENT / "frontend/quota-guard-card.js").read_text(encoding="utf-8")
+assert (
+    "const HE_TEXT="
+    + json.dumps(catalog, ensure_ascii=False, separators=(",", ":"))
+    + ";"
+    in card
+)

@@ -14,19 +14,19 @@ SERVICES = {
     "google_assistant_sdk": (
         "embeddedassistant.googleapis.com",
         "embedded-assistant-prod/converse_requests",
-        "Google Assistant — בקשות היום",
+        "Google Assistant — requests today",
         "day",
     ),
     "google_cloud": (
         "texttospeech.googleapis.com",
         "texttospeech.googleapis.com/requests",
-        "Google TTS — שיא בקשות לדקה היום",
+        "Google TTS — peak requests per minute today",
         "minute_peak",
     ),
     "google": (
         "calendar-json.googleapis.com",
         "calendar-json.googleapis.com/default",
-        "Google Calendar — שיא בקשות לדקה היום",
+        "Google Calendar — peak requests per minute today",
         "minute_peak",
     ),
 }
@@ -102,18 +102,19 @@ class GoogleProvider:
                 cfg = {
                     "id": id,
                     "name": name,
+                    "builtin_name": True,
                     "entry_ids": target,
                     "kind": "rate_limit",
                     "source": "Google Service Usage + Cloud Monitoring",
-                    "unit": "בקשות ביום"
+                    "unit": "requests per day"
                     if mode == "day"
-                    else "בקשות בדקה (שיא יומי מדווח)",
+                    else "requests per minute (reported daily peak)",
                     "max_age": 600,
                     "enforce": True,
                 }
                 row = {
                     "config": cfg,
-                    "provider_note": "מדידה מהספק בהשהיה; אינה תקרת חיוב או מונה תווים חינמיים",
+                    "provider_note": "Delayed provider measurement; not a billing cap or free character counter",
                     "project": project,
                     "reporting": None,
                 }

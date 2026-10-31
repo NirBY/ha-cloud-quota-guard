@@ -17,7 +17,7 @@ class PolicyTests(unittest.TestCase):
     def test_tuya_sharing_is_not_given_cloud_project_limits(self):
         policy = policies.policy_for("tuya", {"user_code": "secret-value"})
         self.assertIn("Sharing SDK", policy["scope"])
-        self.assertIn("מידע ייחוס", policy["scope"])
+        self.assertIn("reference only", policy["scope"])
         self.assertNotIn("secret-value", str(policy))
         self.assertTrue(all("/v2.0/cloud/" in row["scope"] for row in policy["limits"]))
 
@@ -39,10 +39,10 @@ class PolicyTests(unittest.TestCase):
     def test_telegram_sizes_and_group_scope(self):
         policy = policies.policy_for("telegram_bot")
         limits = {row["name"]: row for row in policy["limits"]}
-        self.assertEqual(limits["העלאת תמונה"]["value"], "10")
-        self.assertEqual(limits["העלאת קובץ אחר"]["value"], "50")
-        self.assertEqual(limits["שליחה לקבוצה"]["scope"], "לכל קבוצה")
-        self.assertEqual(limits["שידור חינמי כולל"]["value"], "≈30")
+        self.assertEqual(limits["Upload photo"]["value"], "10")
+        self.assertEqual(limits["Upload other file"]["value"], "50")
+        self.assertEqual(limits["Send to group"]["scope"], "Per group")
+        self.assertEqual(limits["Free bulk broadcast"]["value"], "≈30")
         self.assertNotIn(
             "https://local.example",
             str(
