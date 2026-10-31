@@ -271,9 +271,7 @@ class Guard:
                         # A successful empty query is a reporting observation, not a
                         # verified zero-use sample. Never enforce or graph it as zero.
                         m["status"] = "no_activity_reported"
-                        persistent_notification.async_dismiss(
-                            self.hass, f"quota_guard_{id}_data_unavailable"
-                        )
+                        self.clear_data_alert(id, m)
                         continue
                     message = f"{cfg['name']}: המדידה חסרה או ישנה; לא ניתן לאמת הגנה"
                     if (
@@ -281,20 +279,21 @@ class Guard:
                         == "Google has not reported any usage samples for this day; not assumed zero"
                     ):
                         message = f"{cfg['name']}: Google עדיין לא פרסם דגימות שימוש ליום המכסה הנוכחי. ממתין לנתוני הספק; אין להסיק שהשימוש אפס."
-                    # Refresh an existing alert after reload as well as on transitions.
-                    # No repeated push notification while the condition is unchanged.
-                    persistent_notification.async_create(
-                        self.hass,
-                        message,
-                        title="מכסות שירותים",
-                        notification_id=f"quota_guard_{id}_data_unavailable",
-                    )
-                    if old_status not in (None, "unknown", "stale"):
-                        await self.event(id, "data_unavailable", None, message)
+                    # Persistent notifications may be forwarded to Telegram. Do not
+                    # recreate unchanged messages on each poll or after a restart.
+                    if m.get("data_alert_message") != message:
+                        m["data_alert_message"] = message
+                        if old_status not in (None, "unknown", "stale"):
+                            await self.event(id, "data_unavailable", None, message)
+                        else:
+                            persistent_notification.async_create(
+                                self.hass,
+                                message,
+                                title="מכסות שירותים",
+                                notification_id=f"quota_guard_{id}_data_unavailable",
+                            )
                     continue
-                persistent_notification.async_dismiss(
-                    self.hass, f"quota_guard_{id}_data_unavailable"
-                )
+                self.clear_data_alert(id, m)
                 period = sample["period"]
                 if m.get("period") != period:
                     m["period"] = period
@@ -351,6 +350,13 @@ class Guard:
             await self.store.async_save(self.data)
             for listener in self.listeners:
                 listener()
+
+    def clear_data_alert(self, id, metric):
+        """Clear the persisted latch only on recovery; also dismiss pre-upgrade alerts."""
+        persistent_notification.async_dismiss(
+            self.hass, f"quota_guard_{id}_data_unavailable"
+        )
+        metric.pop("data_alert_message", None)
 
     async def github_samples(self, now):
         """Existing GitHub credentials stay in HA; read the provider's real counter."""

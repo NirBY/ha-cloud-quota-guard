@@ -1,6 +1,7 @@
 """Exercise real orchestration against an in-memory HA service boundary."""
 
 import importlib.util
+import json
 import sys
 import types
 import unittest
@@ -187,15 +188,26 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             m["sample"]["timestamp"] = None
             await self.g.tick()
             self.assertIn("Test:", pn.async_create.call_args.args[1])
+            self.assertEqual(pn.async_create.call_count, 1)
             self.assertNotIn("remaining", m)
             count = len(self.g.data["events"])
             await self.g.tick()
             self.assertEqual(count, len(self.g.data["events"]))
+            self.assertEqual(pn.async_create.call_count, 1)
+            # The latch lives in persisted metric data, not transient manager state.
+            self.g.data = json.loads(json.dumps(self.g.data))
+            await self.g.tick()
+            self.assertEqual(pn.async_create.call_count, 1)
+            m = self.g.data["metrics"]["test"]
             m["sample"]["timestamp"] = dt.utcnow().isoformat()
             await self.g.tick()
             pn.async_dismiss.assert_called_with(
                 self.g.hass, "quota_guard_test_data_unavailable"
             )
+            self.assertNotIn("data_alert_message", m)
+            m["sample"]["timestamp"] = None
+            await self.g.tick()
+            self.assertEqual(pn.async_create.call_count, 2)
         finally:
             pn.async_create, pn.async_dismiss = create, dismiss
 

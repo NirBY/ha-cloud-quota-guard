@@ -7,6 +7,8 @@
   and check time, without treating it as a verified zero-use quota sample.
 - Stop false missing-data notifications for fresh, successful empty reports.
   Never enforce cutoff or add a zero history point from an empty response.
+- Persist the missing-data notification latch. Unchanged alerts are not recreated
+  every minute or after restart, preventing repeated forwarded Telegram messages.
 - Add source-linked reference cards for Telegram Bot, Tuya and Xiaomi MIoT.
   Keep per-endpoint, per-chat, per-group and connection-mode scope explicit.
 - Identify Tuya Sharing SDK separately from Developer Cloud OpenAPI quotas;

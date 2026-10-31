@@ -160,6 +160,9 @@ Non-finite/negative values, invalid limits, missing periods, stale/future timest
 
 - `quota_guard.configure` and `quota_guard.report` require administrator access.
 - Home Assistant persistent notifications identify the affected metric. Missing-data notifications clear when valid measurements return.
+- An unchanged missing-data alert is created once, not on every poll. Its latch
+  survives restarts and resets on recovery, so forwarding persistent notifications
+  to Telegram does not generate a message every minute for the same condition.
 - Event `quota_guard_event` carries `id`, `kind`, `threshold`, `detected_at`, `source_at`, `period` and `message`. Route this event to your preferred notification service with an automation; no personal mobile destination is hardcoded.
 - At 95% or above, an enforced metric requests persistent disabling of its mapped config entries.
 - Cutoff results distinguish `disabled`, `restart_required`, `failed` and `missing`. An unsuccessful unload is not reported as protection.
