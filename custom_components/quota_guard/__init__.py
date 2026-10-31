@@ -17,6 +17,7 @@ from homeassistant.util import dt as dt_util
 
 from .engine import crossings, evaluate
 from .google_provider import GoogleProvider
+from .provider_policies import policy_for
 
 DOMAIN = "quota_guard"
 SCHEMA = vol.Schema(
@@ -188,6 +189,7 @@ class Guard:
                     "state": e.state.value,
                     "disabled": bool(e.disabled_by),
                     "metrics": ids,
+                    "policy": policy_for(e.domain, e.data, e.options),
                     "coverage": "configured"
                     if ids
                     else "local"
@@ -253,6 +255,26 @@ class Guard:
                 if decision["percent"] is None:
                     for field in ("used", "limit", "remaining"):
                         m.pop(field, None)
+                    reporting = m.get("reporting") or {}
+                    checked_at = (
+                        dt_util.parse_datetime(reporting["checked_at"])
+                        if reporting.get("checked_at")
+                        else None
+                    )
+                    if (
+                        reporting.get("state") == "no_activity_reported"
+                        and checked_at is not None
+                        and 0
+                        <= (dt_util.utcnow() - checked_at).total_seconds()
+                        <= cfg["max_age"]
+                    ):
+                        # A successful empty query is a reporting observation, not a
+                        # verified zero-use sample. Never enforce or graph it as zero.
+                        m["status"] = "no_activity_reported"
+                        persistent_notification.async_dismiss(
+                            self.hass, f"quota_guard_{id}_data_unavailable"
+                        )
+                        continue
                     message = f"{cfg['name']}: המדידה חסרה או ישנה; לא ניתן לאמת הגנה"
                     if (
                         m.get("provider_error")

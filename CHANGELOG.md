@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0 — 2026-10-31
+
+- Distinguish a successful empty Google usage query from a monitoring outage.
+  Show the numeric count of reported requests (zero) with its reporting period
+  and check time, without treating it as a verified zero-use quota sample.
+- Stop false missing-data notifications for fresh, successful empty reports.
+  Never enforce cutoff or add a zero history point from an empty response.
+- Add source-linked reference cards for Telegram Bot, Tuya and Xiaomi MIoT.
+  Keep per-endpoint, per-chat, per-group and connection-mode scope explicit.
+- Identify Tuya Sharing SDK separately from Developer Cloud OpenAPI quotas;
+  distinguish Xiaomi Auto, Local and Cloud connection modes.
+- Correct Telegram photo/file limits and document standard-server exceptions.
+- Reject missing or invalid numeric provider points rather than converting them
+  into zero; scope Google quota queries to the consumer quota resource.
+
 ## 0.2.0 — 2026-10-31
 
 First public HACS release of Cloud Quota Guard.

@@ -21,6 +21,7 @@ jobs:
       - run: ruff format --check .
       - run: python -m unittest discover -s tests -p 'test_*.py'
       - run: node --check custom_components/quota_guard/frontend/quota-guard-card.js
+      - run: node --test tests/dashboard.test.cjs
       - run: python scripts/validate_package.py
   hacs:
     runs-on: ubuntu-latest

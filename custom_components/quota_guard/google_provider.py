@@ -6,6 +6,7 @@ not live rate: Google publishes observations with delay.
 """
 
 import json
+import math
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
@@ -41,9 +42,12 @@ def aggregate(series, metric, mode):
             raise ValueError("Expected DELTA counter")
         for point in ts.get("points", []):
             end = point["interval"]["endTime"]
+            raw = point["value"]
             value = float(
-                point["value"].get("int64Value", point["value"].get("doubleValue", 0))
+                raw["int64Value"] if "int64Value" in raw else raw["doubleValue"]
             )
+            if not math.isfinite(value) or value < 0:
+                raise ValueError("Invalid provider usage point")
             buckets[end] = buckets.get(end, 0) + value
     if not buckets:
         return None, None
@@ -111,6 +115,7 @@ class GoogleProvider:
                     "config": cfg,
                     "provider_note": "מדידה מהספק בהשהיה; אינה תקרת חיוב או מונה תווים חינמיים",
                     "project": project,
+                    "reporting": None,
                 }
                 try:
                     key = (project, service)
@@ -142,7 +147,7 @@ class GoogleProvider:
                     page = None
                     while True:
                         params = {
-                            "filter": f'metric.type="serviceruntime.googleapis.com/quota/rate/net_usage" AND resource.labels.service="{service}"',
+                            "filter": f'metric.type="serviceruntime.googleapis.com/quota/rate/net_usage" AND resource.type="consumer_quota" AND resource.labels.service="{service}"',
                             "interval.startTime": midnight.astimezone(UTC).isoformat(),
                             "interval.endTime": now.isoformat(),
                             "pageSize": 10000,
@@ -169,6 +174,16 @@ class GoogleProvider:
                         if used is not None
                         else "Google has not reported any usage samples for this day; not assumed zero"
                     )
+                    if used is None:
+                        row["provider_error"] = None
+                        row["reporting"] = {
+                            "state": "no_activity_reported",
+                            "reported_used": 0,
+                            "checked_at": now.isoformat(),
+                            "period": midnight.date().isoformat()
+                            + " America/Los_Angeles",
+                            "basis": "Successful Cloud Monitoring query returned no usage samples; not a verified zero-use quota measurement",
+                        }
                     if used is not None:
                         row["sample"] = {
                             "used": used,

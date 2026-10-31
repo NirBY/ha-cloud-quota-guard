@@ -65,7 +65,7 @@ views:
       - type: custom:quota-guard-card
 ```
 
-If your frontend blocks automatic modules, manually add the resource `/quota_guard/quota-guard-card.js?v=0.2.0` as a JavaScript module. The card is administrator-only because its report includes integration inventory and enforcement details. The integration does not create or overwrite dashboard layouts.
+If your frontend blocks automatic modules, manually add the resource `/quota_guard/quota-guard-card.js?v=0.3.0` as a JavaScript module. The card is administrator-only because its report includes integration inventory and enforcement details. The integration does not create or overwrite dashboard layouts.
 
 ## Supported measurement sources
 
@@ -80,9 +80,32 @@ If your frontend blocks automatic modules, manually add the resource `/quota_gua
 
 Built-in GitHub/Google measurements are discovered automatically after setup, with enforcement enabled for their mapped integrations. Generic metrics can set `enforce: false` for monitoring only. This release uses fixed 90% warning and 95% cutoff thresholds.
 
-Google quotas are read from the provider's effective limits, rather than assumed free-tier values. Quota limits are cached for one hour. Usage is polled every minute; Google's reporting is delayed and the daily window follows **America/Los_Angeles**. A new day with no reported samples stays unknown. The adapter does not enable Google APIs or grant permissions for you. Project association currently supports legacy `api-project-N` service accounts whose project number appears in the existing OAuth client ID; unmatched entries are not monitored.
+Google quotas are read from the provider's effective limits, rather than assumed free-tier values. Quota limits are cached for one hour. Usage is polled every minute; Google's reporting is delayed and the daily window follows **America/Los_Angeles**. A successful current-day query with no samples displays **0 requests reported**, with a check time and period. This is a reporting observation, not a verified zero-use quota sample: no percentage, remaining balance, cutoff or zero graph point is derived from it. An expired or failed query still raises a loss-of-measurement alert. The adapter does not enable Google APIs or grant permissions for you. Project association currently supports legacy `api-project-N` service accounts whose project number appears in the existing OAuth client ID; unmatched entries are not monitored.
 
 IMOU, OpenAI billing/credits and other unconnected providers are shown as needing a source when discovered. They do **not** have automatic quota protection just because their integration appears in the inventory. Provider email reminders are separate from this integration.
+
+### Provider limit reference cards
+
+The **Provider limits** dashboard filter shows documented limits separately from
+measured quotas. These cards are informational: no usage counter, graph, remaining
+balance or automatic cutoff is claimed for them.
+
+- **Tuya:** the [Cloud OpenAPI documentation](https://developer.tuya.com/en/docs/iot/frequency-control?id=Kcojz2r2dg1f6)
+  specifies different limits for each endpoint and cloud project. The official
+  Home Assistant integration uses the Sharing SDK, so these Developer OpenAPI
+  examples are clearly marked as reference information, not active account limits.
+- **Xiaomi MIoT:** the card shows the entry's configured Auto/Local/Cloud mode.
+  [Auto mode](https://github.com/al-one/hass-xiaomi-miot#config) prefers LAN where
+  supported and can use cloud access. No unverified daily/account quota is invented
+  from polling intervals, device counts or HTTP 429 responses.
+- **Telegram Bot:** [published rate guidance](https://core.telegram.org/bots/faq#how-do-i-avoid-hitting-limits)
+  distinguishes chats, groups and free bulk broadcasts. [File limits](https://core.telegram.org/bots/api#sending-files)
+  distinguish multipart uploads (10 MB photos, 50 MB other files), URL-based sends,
+  and standard-server downloads. The 20/minute limit is for groups, not a blanket
+  limit for all channels. Custom Bot API endpoints can have different file limits.
+
+Provider policies were checked on 2026-10-31. They are versioned reference data,
+not a live feed of each provider's policy or your account's consumption.
 
 ## Register a sensor source
 

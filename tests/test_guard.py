@@ -66,6 +66,41 @@ spec.loader.exec_module(guard)
 
 
 class RuntimeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_successful_empty_report_is_not_zero_quota_or_cutoff(self):
+        from unittest.mock import Mock
+
+        pn = sys.modules["homeassistant.components.persistent_notification"]
+        create, dismiss = pn.async_create, pn.async_dismiss
+        pn.async_create = Mock()
+        pn.async_dismiss = Mock()
+        try:
+            metric = self.g.data["metrics"]["test"]
+            metric.pop("sample")
+            metric["status"] = "ok"
+            metric["reporting"] = {
+                "state": "no_activity_reported",
+                "reported_used": 0,
+                "checked_at": dt.utcnow().isoformat(),
+                "period": "today",
+            }
+            await self.g.tick()
+            self.assertEqual(metric["status"], "no_activity_reported")
+            self.assertIsNone(metric["percent"])
+            self.assertNotIn("used", metric)
+            self.assertNotIn("sample", metric)
+            self.assertEqual(metric.get("points", []), [])
+            self.entries.async_set_disabled_by.assert_not_awaited()
+            pn.async_create.assert_not_called()
+            pn.async_dismiss.assert_called_with(
+                self.g.hass, "quota_guard_test_data_unavailable"
+            )
+            metric["reporting"]["checked_at"] = "2020-01-01T00:00:00+00:00"
+            await self.g.tick()
+            self.assertEqual(metric["status"], "unknown")
+            pn.async_create.assert_called()
+        finally:
+            pn.async_create, pn.async_dismiss = create, dismiss
+
     async def asyncSetUp(self):
         self.entry = types.SimpleNamespace(
             domain="test_provider",

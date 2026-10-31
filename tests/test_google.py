@@ -40,6 +40,15 @@ class GoogleTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             provider.aggregate([data], "m", "day")
 
+    def test_explicit_zero_is_a_sample_but_missing_value_is_not(self):
+        self.assertEqual(
+            provider.aggregate([series([("01", 0)])], "m", "day"), (0, "01")
+        )
+        data = series([("01", 0)])
+        data["points"][0]["value"] = {}
+        with self.assertRaises(KeyError):
+            provider.aggregate([data], "m", "day")
+
 
 if __name__ == "__main__":
     unittest.main()
