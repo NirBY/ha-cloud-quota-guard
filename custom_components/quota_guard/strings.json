@@ -84,7 +84,7 @@
         },
         "limit": {
           "name": "Allowance",
-          "description": "Verified effective allowance for this period."
+          "description": "Optional verified limit. Omit to record usage without percentages or cutoff; a configured fixed limit is used if available."
         },
         "period": {
           "name": "Period",

@@ -116,6 +116,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
         self.entries = types.SimpleNamespace(
             async_get_entry=lambda _: self.entry,
+            async_entries=lambda: [],
             async_set_disabled_by=AsyncMock(side_effect=disable),
         )
         hass = types.SimpleNamespace(
@@ -142,6 +143,29 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
                 "timestamp": dt.utcnow().isoformat(),
             },
         }
+
+    async def test_usage_without_limit_is_recorded_without_alert_or_cutoff(self):
+        m = self.g.data["metrics"]["test"]
+        m["sample"].pop("limit")
+        await self.g.tick()
+        self.assertEqual(m["status"], "usage_only")
+        self.assertEqual(m["used"], 89)
+        self.assertIsNone(m["percent"])
+        self.assertNotIn("remaining", m)
+        self.assertEqual(m["points"][0]["used"], 89)
+        self.assertEqual(self.g.data["events"], [])
+        self.entries.async_set_disabled_by.assert_not_awaited()
+        call = types.SimpleNamespace(
+            data={
+                "id": "test",
+                "used": 91,
+                "period": "p1",
+                "timestamp": dt.utcnow().isoformat(),
+            }
+        )
+        await self.g.report(call)
+        self.assertEqual(m["used"], 91)
+        self.assertIsNone(m["percent"])
 
     async def test_warn_disable_latch_restart(self):
         await self.g.tick()

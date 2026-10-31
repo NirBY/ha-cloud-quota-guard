@@ -48,3 +48,13 @@ test('unavailable quota data is separate from the integration connection',()=>{
  assert.match(card.detail(row),/home-assistant.io\/integrations\/google_translate/);
  card.setConfig({language:'he'});assert.match(card.tile(row),/נתוני מכסה אינם זמינים/);assert.match(card.tile(row),/מחובר/);
 });
+test('usage without a limit has raw units and a graph, without percentage or cutoff',()=>{
+ const card=new Card();const now=new Date().toISOString();const m={type:'metric',key:'tuya',status:'usage_only',percent:null,config:{id:'tuya',name:'Tuya',unit:'requests',entry_ids:['entry'],max_age:180,enforce:false},sample:{used:12,timestamp:now,period:'today'},points:[{at:now,used:12,period:'today'}]};
+ assert.equal(card.usageFresh(m),true);assert.match(card.tile(m),/12<small>observed/);const html=card.detail(m);assert.match(html,/<svg/);assert.match(html,/12 requests/);assert.doesNotMatch(html,/90%|95%|12%|NaN/);
+ m.sample.timestamp='2020-01-01T00:00:00Z';assert.match(card.tile(m),/stale/);assert.match(card.tile(m),/12<small>/);
+});
+test('details link mapped integrations and deduplicated automation dependencies',()=>{
+ const card=new Card();card.data={inventory:[{entry_id:'one',domain:'github',title:'GitHub account'}],relationships:{available:true,entries:{one:[{entity_id:'automation.repo',name:'Repo alert',automation_id:'my id',entities:['sensor.repo'],devices:[]}]}}};
+ const html=card.impact({config:{entry_ids:['one'],limit:5000,enforce:true}});
+ assert.match(html,/\/config\/integrations\/integration\/github/);assert.match(html,/\/config\/automation\/edit\/my%20id/);assert.match(html,/Related automations remain enabled/);
+});

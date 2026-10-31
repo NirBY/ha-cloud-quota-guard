@@ -50,6 +50,17 @@ class TestQuota(unittest.TestCase):
         s["limit"] = 0
         self.assertEqual(engine.evaluate(s, self.now)["status"], "unknown")
 
+    def test_usage_without_limit_still_requires_fresh_finite_sample(self):
+        sample = self.sample(25)
+        sample.pop("limit")
+        result = engine.evaluate(sample, self.now)
+        self.assertEqual(result, {"status": "usage_only", "percent": None, "used": 25})
+        self.assertEqual(
+            engine.evaluate(sample, self.now + timedelta(hours=1))["status"], "stale"
+        )
+        sample["used"] = float("nan")
+        self.assertEqual(engine.evaluate(sample, self.now)["status"], "unknown")
+
     def test_jump_and_no_duplicate(self):
         self.assertEqual(engine.crossings(80, 105), [90, 95, 100])
         self.assertEqual(engine.crossings(96, 97), [])

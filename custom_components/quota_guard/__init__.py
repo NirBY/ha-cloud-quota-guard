@@ -19,6 +19,8 @@ from .engine import crossings, evaluate
 from .google_provider import GoogleProvider
 from .localization import translate
 from .provider_policies import policy_for
+from .relationships import collect_relationships
+from .tuya_observer import TuyaObserver
 
 DOMAIN = "quota_guard"
 SCHEMA = vol.Schema(
@@ -66,7 +68,7 @@ async def async_setup(hass, config):
             {
                 vol.Required("id"): cv.string,
                 vol.Required("used"): vol.Coerce(float),
-                vol.Required("limit"): vol.Coerce(float),
+                vol.Optional("limit"): vol.Coerce(float),
                 vol.Required("period"): cv.string,
                 vol.Required("timestamp"): cv.string,
             }
@@ -91,6 +93,7 @@ async def async_setup_entry(hass, entry):
 async def async_unload_entry(hass, entry):
     ok = await hass.config_entries.async_unload_platforms(entry, ["sensor"])
     if ok:
+        hass.data[DOMAIN].tuya.close()
         hass.data.pop(DOMAIN, None)
     return ok
 
@@ -115,6 +118,8 @@ class Guard:
         self.listeners = []
         self.lock = asyncio.Lock()
         self.google = GoogleProvider()
+        self.tuya = TuyaObserver()
+        self.relationships = {"available": False, "entries": {}}
 
     async def load(self):
         self.data = await self.store.async_load() or self.data
@@ -123,6 +128,7 @@ class Guard:
         return {
             **self.data,
             "inventory": self.inventory,
+            "relationships": self.relationships,
             "updated_at": dt_util.utcnow().isoformat(),
         }
 
@@ -150,12 +156,11 @@ class Guard:
             if metric is None:
                 raise vol.Invalid("Configure the metric first")
             sample = {k: v for k, v in call.data.items() if k != "id"}
-            if (
-                evaluate(sample, dt_util.utcnow(), metric["config"]["max_age"])[
-                    "percent"
-                ]
-                is None
-            ):
+            if "limit" not in sample and metric["config"].get("limit") is not None:
+                sample["limit"] = metric["config"]["limit"]
+            if evaluate(sample, dt_util.utcnow(), metric["config"]["max_age"])[
+                "status"
+            ] not in ("ok", "warning", "cutoff", "usage_only"):
                 raise vol.Invalid("Invalid/stale sample, period or timestamp")
             previous = metric.get("sample", {})
             if previous.get("timestamp") and dt_util.parse_datetime(
@@ -226,7 +231,16 @@ class Guard:
 
     async def tick(self, *_):
         async with self.lock:
+            for row in self.tuya.collect(
+                self.hass.config_entries.async_entries(), self.data["metrics"]
+            ):
+                id = row["config"]["id"]
+                self.data["metrics"].setdefault(id, {}).update(row)
             await self.inventory_refresh()
+            try:
+                self.relationships = collect_relationships(self.hass)
+            except ImportError:
+                self.relationships = {"available": False, "entries": {}}
             now = dt_util.utcnow()
             await self.github_samples(now)
             await self.google_samples()
@@ -253,6 +267,23 @@ class Guard:
                 decision = evaluate(sample, now, cfg["max_age"])
                 old_status = m.get("status")
                 m.update(decision)
+                if decision["status"] == "usage_only":
+                    m.pop("limit", None)
+                    m.pop("remaining", None)
+                    self.clear_data_alert(id, m)
+                    points = m.setdefault("points", [])
+                    if not points or points[-1]["source_at"] != sample["timestamp"]:
+                        points.append(
+                            {
+                                "at": now.isoformat(),
+                                "source_at": sample["timestamp"],
+                                "used": decision["used"],
+                                "period": sample["period"],
+                                "segment": m.get("observation", {}).get("started_at"),
+                            }
+                        )
+                        m["points"] = points[-3000:]
+                    continue
                 if decision["percent"] is None:
                     for field in ("used", "limit", "remaining"):
                         m.pop(field, None)
@@ -316,6 +347,7 @@ class Guard:
                             "at": now.isoformat(),
                             "source_at": sample["timestamp"],
                             "percent": pct,
+                            "used": decision["used"],
                             "period": period,
                         }
                     )

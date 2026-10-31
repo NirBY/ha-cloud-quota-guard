@@ -16,6 +16,9 @@ English is the default and fallback language. The dashboard follows your Home As
 ## Features
 
 - Service tiles with utilization, allowance, remaining capacity and measurement freshness.
+- Usage-only measurements and raw-unit charts when the limit is unknown.
+- Passive Tuya HTTP request counts, explicitly scoped to this Home Assistant instance.
+- Links to mapped cutoff integrations and directly related automations.
 - Click a tile for provider details, reset period and recorded usage history.
 - Graph ranges: one hour, 24 hours, seven days, or all retained observations.
 - Focus on small utilization values, or show the full 90%/95% threshold scale.
@@ -72,7 +75,7 @@ views:
       - type: custom:quota-guard-card
 ```
 
-If your frontend blocks automatic modules, manually add the resource `/quota_guard/quota-guard-card.js?v=0.4.1` as a JavaScript module. The card is administrator-only because its report includes integration inventory and enforcement details. The integration does not create or overwrite dashboard layouts.
+If your frontend blocks automatic modules, manually add the resource `/quota_guard/quota-guard-card.js?v=0.5.0` as a JavaScript module. The card is administrator-only because its report includes integration inventory and enforcement details. The integration does not create or overwrite dashboard layouts.
 
 ## Supported measurement sources
 
@@ -82,6 +85,7 @@ If your frontend blocks automatic modules, manually add the resource `/quota_gua
 | Google Assistant SDK | Project daily conversation request usage | Existing Google Cloud service account, Service Usage and Cloud Monitoring read permissions, supported project association. |
 | Google Cloud TTS | Highest reported project request-minute in the provider day | API quota, **not** free/billable voice characters. |
 | Google Calendar | Highest reported project request-minute in the provider day | Project quota, not per-user quota. |
+| Tuya Sharing SDK | HTTP attempts observed locally, including failures and token refreshes | Observation starts when the monitor attaches. Excludes MQTT, startup, monitoring gaps and other apps. No verified account limit or automatic cutoff. |
 | Generic sensor | Your verified current-period usage and limit | A source-provided period identifier and timezone-aware timestamp are required. |
 | Administrator report action | Measurements from another trusted adapter | Configure the metric first. No public/unauthenticated webhook is exposed. |
 
@@ -89,7 +93,33 @@ Built-in GitHub/Google measurements are discovered automatically after setup, wi
 
 Google quotas are read from the provider's effective limits, rather than assumed free-tier values. Quota limits are cached for one hour. Usage is polled every minute; Google's reporting is delayed and the daily window follows **America/Los_Angeles**. A successful current-day query with no samples displays **0 requests reported**, with a check time and period. This is a reporting observation, not a verified zero-use quota sample: no percentage, remaining balance, cutoff or zero graph point is derived from it. An expired or failed query still raises a loss-of-measurement alert. The adapter does not enable Google APIs or grant permissions for you. Project association currently supports legacy `api-project-N` service accounts whose project number appears in the existing OAuth client ID; unmatched entries are not monitored.
 
+Google Translate TTS uses an unofficial speech service, separate from Google Cloud TTS. An unavailable quota source does not mean its integration is disconnected.
+
 IMOU, OpenAI billing/credits and other unconnected providers are shown as needing a source when discovered. They do **not** have automatic quota protection just because their integration appears in the inventory. Provider email reminders are separate from this integration.
+
+### Usage when the limit is unknown
+
+Omit `limit` and `limit_entity` to monitor verified sensor usage without a quota
+limit. The `quota_guard.report` action also accepts a report without `limit`.
+A source timestamp and provider period are still required. Raw usage and its
+history are shown; no percentage, remaining balance or quota cutoff is inferred.
+If a fixed verified limit was configured, reports without a limit use that value.
+
+Official Tuya Sharing SDK sessions are observed automatically. Counts are local
+HTTP attempts, not provider billing, account-wide usage or MQTT message counts.
+Zero means no requests were observed since attachment, not zero account usage.
+Daily counts reset at midnight UTC and persist on the monitor's regular save;
+requests during startup and monitoring gaps cannot be reconstructed. The observer
+passes requests/responses through unchanged, stores no URLs/headers/payloads, makes
+no extra requests, and detaches on unload. Unsupported SDK sessions remain without
+a measured source rather than displaying an invented zero.
+
+### Cutoff targets and automation dependencies
+
+Metric details link the mapped integrations and automations with explicit entity
+or device references to them. Integration cutoff leaves those automations enabled;
+they may lose a service or data source. This is not an exhaustive dependency graph:
+templates, areas, scripts and indirect service calls may introduce other dependencies.
 
 ### Provider limit reference cards
 

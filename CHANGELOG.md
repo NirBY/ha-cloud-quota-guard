@@ -1,6 +1,11 @@
 # Changelog
 
-## 0.4.1
+## 0.5.0
+
+- Display measured usage and raw-unit history even when the limit is unknown.
+- Passively count official Tuya Sharing SDK HTTP attempts in this HA instance.
+- Link mapped cutoff integrations and directly related automations.
+- Accept generic usage-only reports and sensors; never derive percentages or cutoffs without a verified limit.
 
 - Clarify that unavailable quota data does not indicate a disconnected integration.
 - Explain Google Translate TTS separately from metered Google Cloud TTS.

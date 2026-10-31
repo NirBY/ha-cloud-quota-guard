@@ -79,7 +79,7 @@ report:
           max: 1000000000000
           mode: box
     limit:
-      required: true
+      required: false
       selector:
         number:
           min: 1.0e-06

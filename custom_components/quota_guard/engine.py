@@ -7,15 +7,20 @@ from datetime import datetime
 def evaluate(sample, now, max_age=900):
     """Only a fresh, finite provider sample may trigger a cutoff."""
     try:
-        used, limit = float(sample["used"]), float(sample["limit"])
+        used = float(sample["used"])
         timestamp = datetime.fromisoformat(sample["timestamp"].replace("Z", "+00:00"))
         if timestamp.tzinfo is None or not sample.get("period"):
             raise ValueError("Missing timezone or period")
         age = (now - timestamp).total_seconds()
-        if not all(map(math.isfinite, (used, limit))) or used < 0 or limit <= 0:
+        if not math.isfinite(used) or used < 0:
             raise ValueError("Invalid numeric quota")
         if age < -60 or age > max_age:
             return {"status": "stale", "percent": None}
+        if sample.get("limit") is None:
+            return {"status": "usage_only", "percent": None, "used": used}
+        limit = float(sample["limit"])
+        if not math.isfinite(limit) or limit <= 0:
+            raise ValueError("Invalid numeric limit")
         percent = used / limit * 100
         return {
             "status": "cutoff"
