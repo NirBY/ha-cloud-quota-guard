@@ -1,0 +1,95 @@
+configure:
+  fields:
+    id:
+      required: true
+      selector:
+        text: {}
+    name:
+      required: true
+      selector:
+        text: {}
+    entry_ids:
+      required: true
+      selector:
+        object: {}
+    kind:
+      required: true
+      selector:
+        select:
+          options:
+          - rate_limit
+          - free_allowance
+          - budget
+    source:
+      required: true
+      selector:
+        text: {}
+    unit:
+      required: true
+      selector:
+        text: {}
+    usage_entity:
+      required: false
+      selector:
+        entity:
+          domain: sensor
+    limit_entity:
+      required: false
+      selector:
+        entity:
+          domain: sensor
+    limit:
+      required: false
+      selector:
+        number:
+          min: 1.0e-06
+          max: 1000000000000
+          mode: box
+    period_attribute:
+      required: false
+      selector:
+        text: {}
+    timestamp_attribute:
+      required: false
+      selector:
+        text: {}
+    max_age:
+      required: false
+      selector:
+        number:
+          min: 30
+          max: 86400
+          unit_of_measurement: s
+          mode: box
+    enforce:
+      required: false
+      selector:
+        boolean: {}
+report:
+  fields:
+    id:
+      required: true
+      selector:
+        text: {}
+    used:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 1000000000000
+          mode: box
+    limit:
+      required: true
+      selector:
+        number:
+          min: 1.0e-06
+          max: 1000000000000
+          mode: box
+    period:
+      required: true
+      selector:
+        text: {}
+    timestamp:
+      required: true
+      selector:
+        text: {}
