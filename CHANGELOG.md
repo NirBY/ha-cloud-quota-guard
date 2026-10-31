@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+- Clarify that unavailable quota data does not indicate a disconnected integration.
+- Explain Google Translate TTS separately from metered Google Cloud TTS.
+
+
 ## 0.4.0
 
 - English-default dashboard, provider descriptions and notifications.

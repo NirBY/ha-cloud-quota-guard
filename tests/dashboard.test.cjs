@@ -42,3 +42,9 @@ test('render switches direction and refreshes an already loaded card on profile 
  card.hass={locale:{language:'he'}};assert.match(card.shadowRoot.innerHTML,/direction:rtl/);assert.match(card.shadowRoot.innerHTML,/מכסות ושירותי ענן/);
  card.setConfig({language:'en'});assert.match(card.shadowRoot.innerHTML,/direction:ltr/);
 });
+test('unavailable quota data is separate from the integration connection',()=>{
+ const card=new Card();const row={type:'unknown',key:'translate',domain:'google_translate',title:'Google Translate text-to-speech',entry:{state:'loaded'}};
+ const html=card.tile(row);assert.match(html,/Quota data unavailable/);assert.match(html,/Connected/);assert.match(html,/does not indicate a connection failure/);assert.doesNotMatch(html,/Source not connected/);
+ assert.match(card.detail(row),/home-assistant.io\/integrations\/google_translate/);
+ card.setConfig({language:'he'});assert.match(card.tile(row),/נתוני מכסה אינם זמינים/);assert.match(card.tile(row),/מחובר/);
+});

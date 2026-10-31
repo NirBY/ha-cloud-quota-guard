@@ -199,5 +199,9 @@
   "{name}: measurement is missing or stale; protection cannot be verified": "{name}: המדידה חסרה או ישנה; לא ניתן לאמת הגנה",
   "{name}: Google has not published usage samples for the current quota day. Waiting for provider data; do not assume zero usage.": "{name}: Google עדיין לא פרסם דגימות שימוש ליום המכסה הנוכחי. ממתין לנתוני הספק; אין להסיק שהשימוש אפס.",
   "{name}: detected usage {percent:.2f}% — threshold {threshold}%": "{name}: זוהה שימוש של {percent:.2f}% — סף {threshold}%",
-  "Cutoff: ": "כיבוי: "
+  "Cutoff: ": "כיבוי: ",
+  "Quota data unavailable": "נתוני מכסה אינם זמינים",
+  "Usage and limit not verified": "השימוש והמגבלה אינם מאומתים",
+  "This monitor has no verified quota or usage data for this service. Integration connection status is shown separately.": "אין למנטר נתוני מכסה או שימוש מאומתים לשירות זה. מצב החיבור של האינטגרציה מוצג בנפרד.",
+  "Google Translate TTS uses an unofficial speech service, separate from Google Cloud TTS. This monitor has no verified quota or usage counter for it. This does not indicate a connection failure.": "Google Translate TTS משתמש בשירות דיבור לא רשמי, בנפרד מ־Google Cloud TTS. אין למנטר מכסה מאומתת או מונה שימוש עבורו. אין בכך אינדיקציה לתקלה בחיבור."
 }

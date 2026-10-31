@@ -72,7 +72,7 @@ views:
       - type: custom:quota-guard-card
 ```
 
-If your frontend blocks automatic modules, manually add the resource `/quota_guard/quota-guard-card.js?v=0.4.0` as a JavaScript module. The card is administrator-only because its report includes integration inventory and enforcement details. The integration does not create or overwrite dashboard layouts.
+If your frontend blocks automatic modules, manually add the resource `/quota_guard/quota-guard-card.js?v=0.4.1` as a JavaScript module. The card is administrator-only because its report includes integration inventory and enforcement details. The integration does not create or overwrite dashboard layouts.
 
 ## Supported measurement sources
 
