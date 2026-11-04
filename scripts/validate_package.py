@@ -42,3 +42,5 @@ assert (
     + ";"
     in card
 )
+
+assert "const CARD_VERSION=" + json.dumps(manifest["version"]) + ";" in card

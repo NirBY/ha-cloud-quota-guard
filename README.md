@@ -44,13 +44,28 @@ Requires Home Assistant **2026.3 or later**. HACS installation is supported as a
 
 All runtime files, dashboard JavaScript and brand icons are inside `custom_components/quota_guard/`. No separate dashboard repository or external JavaScript CDN is required.
 
+### Reliable upgrades
+
+HACS replaces the managed `custom_components/quota_guard/` directory during an
+update. All runtime code, frontend assets, translations and icons are committed
+inside that directory. Local edits there must be published in a release to survive
+an update. Quota configuration/history remain in `.storage/quota_guard`; dashboard
+configuration remains in Home Assistant's Lovelace storage.
+
+The release archive is built with `python scripts/package_release.py`. Validation
+checks every runtime file and simulates replacing an old component while retaining
+stored settings/history. Frontend URLs are content-addressed, and a newer module
+updates an already registered card instead of silently keeping the old class.
+An older module cannot downgrade the active card. The footer's versions help
+identify a browser left open on older code.
+
 ### Manual installation
 
 Copy `custom_components/quota_guard/` from this repository to your Home Assistant `config/custom_components/` directory, restart, and add the integration through Settings.
 
 ### Dashboard
 
-The integration registers the bundled JavaScript module automatically. Reload the browser after adding/updating the integration. Add this card to a dashboard:
+The integration registers the complete bundled JavaScript module automatically using a URL derived from its content. Restart Home Assistant after a HACS update. Already open cards can update their registered implementation when the new module loads; future updates are also detected by the card report. Reload the browser once when upgrading from versions before 0.5.1. The card footer shows both card and monitor versions. Add this card to a dashboard:
 
 ```yaml
 type: custom:quota-guard-card
@@ -75,7 +90,7 @@ views:
       - type: custom:quota-guard-card
 ```
 
-If your frontend blocks automatic modules, manually add the resource `/quota_guard/quota-guard-card.js?v=0.5.0` as a JavaScript module. The card is administrator-only because its report includes integration inventory and enforcement details. The integration does not create or overwrite dashboard layouts.
+If your frontend blocks automatic modules, manually add the resource `/quota_guard/quota-guard-card.js?v=0.5.1` as a JavaScript module. The card is administrator-only because its report includes integration inventory and enforcement details. The integration does not create or overwrite dashboard layouts.
 
 ## Supported measurement sources
 

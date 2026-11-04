@@ -129,6 +129,18 @@ class Guard:
             **self.data,
             "inventory": self.inventory,
             "relationships": self.relationships,
+            "frontend": {
+                key: value
+                for key, value in self.hass.data.get(
+                    "quota_guard_frontend_registered", {}
+                ).items()
+                if key in ("version", "url")
+            }
+            if isinstance(
+                getattr(self.hass, "data", {}).get("quota_guard_frontend_registered"),
+                dict,
+            )
+            else {},
             "updated_at": dt_util.utcnow().isoformat(),
         }
 

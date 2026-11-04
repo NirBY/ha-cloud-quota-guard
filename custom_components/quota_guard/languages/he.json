@@ -225,5 +225,7 @@
   "A usage source must provide usage, period and timestamp. A verified limit is optional; it is required for percentages and quota enforcement.": "מקור שימוש צריך לספק שימוש, תקופה וחותמת זמן. מגבלה מאומתת היא אופציונלית ונדרשת לחישוב אחוזים ולאכיפת מכסה.",
   "Monitored sources": "מקורות מנוטרים",
   "Sources with recent data": "מקורות עם נתונים עדכניים",
-  "Sources without a fresh measurement": "מקורות ללא מדידה עדכנית"
+  "Sources without a fresh measurement": "מקורות ללא מדידה עדכנית",
+  "Card version": "גרסת הכרטיס",
+  "Monitor version": "גרסת המנטר"
 }

@@ -1,13 +1,21 @@
 {
   "domain": "quota_guard",
   "name": "Cloud Quota Guard",
-  "codeowners": ["@NirBY"],
+  "codeowners": [
+    "@NirBY"
+  ],
   "config_flow": true,
-  "dependencies": ["frontend", "http", "persistent_notification"],
+  "dependencies": [
+    "frontend",
+    "http",
+    "persistent_notification"
+  ],
   "documentation": "https://github.com/NirBY/ha-cloud-quota-guard",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/NirBY/ha-cloud-quota-guard/issues",
-  "requirements": ["google-auth[requests]==2.62.0"],
-  "version": "0.5.0"
+  "requirements": [
+    "google-auth[requests]==2.62.0"
+  ],
+  "version": "0.5.1"
 }

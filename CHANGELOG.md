@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1
+
+- Fix upgrades keeping an already registered older dashboard implementation.
+- Use content-addressed card URLs and reconcile frontend registration on reload.
+- Detect newer backend assets from open cards and show card/monitor versions.
+- Build and verify complete release archives; test component replacement preserves quota history and dashboard configuration.
+
+
 ## 0.5.0
 
 - Display measured usage and raw-unit history even when the limit is unknown.

@@ -58,3 +58,17 @@ test('details link mapped integrations and deduplicated automation dependencies'
  const html=card.impact({config:{entry_ids:['one'],limit:5000,enforce:true}});
  assert.match(html,/\/config\/integrations\/integration\/github/);assert.match(html,/\/config\/automation\/edit\/my%20id/);assert.match(html,/Related automations remain enabled/);
 });
+
+test('loading an upgraded module replaces a legacy registered card without losing state',()=>{
+ class LegacyCard {state(){return 'old';}}
+ const instance=new LegacyCard();instance.config={language:'he'};instance.selected='saved-selection';
+ let registered=LegacyCard;
+ const scope={...context,customElements:{get(){return registered;},define(name,value){registered=value;}}};
+ const code=fs.readFileSync(path.join(__dirname,'../custom_components/quota_guard/frontend/quota-guard-card.js'),'utf8');
+ vm.runInNewContext('(function(){'+code+'})()',scope);
+ assert.equal(registered,LegacyCard);assert.equal(instance.language,'he');assert.equal(instance.selected,'saved-selection');assert.equal(instance.t('Daily limit'),'מגבלה יומית');assert.equal(typeof instance.usageDetail,'function');
+ const upgraded=registered.prototype.usageDetail;
+ const older=code.replace(/const CARD_VERSION="[^"]+"/, 'const CARD_VERSION="0.4.0"');
+ vm.runInNewContext('(function(){'+older+'})()',scope);
+ assert.equal(registered.prototype.usageDetail,upgraded);
+});
