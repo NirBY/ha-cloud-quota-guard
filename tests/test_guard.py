@@ -187,7 +187,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         issues = {("imou_life", IMOU_QUOTA_KEY + "_entry"): issue}
 
         def collect(hass, previous):
-            return signals_for(issues, [self.entry], previous, now)
+            return signals_for(issues, [self.entry], previous)
 
         self.g.data["metrics"]["test"].pop("sample")
         self.g.inventory = [{"entry_id": "entry"}]
@@ -197,6 +197,11 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             patch.object(guard, "collect_signals", collect),
             patch.object(pn, "async_create") as create,
         ):
+            issue.active = False
+            await self.g.provider_signals_refresh()
+            self.assertFalse(self.g.inventory[0]["provider_signal"]["confirmed"])
+            create.assert_not_called()
+            issue.active = True
             await self.g.tick()
             self.assertIn("2026-12-01", create.call_args.args[1])
             self.assertIn("paused", create.call_args.args[1])

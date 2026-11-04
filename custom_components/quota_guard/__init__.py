@@ -546,7 +546,10 @@ class Guard:
         # Save the incident before it can be forwarded by another automation.
         await self.store.async_save(self.data)
         for key, signal in current.items():
-            if key in previous or not signal["confirmed"]:
+            if (
+                previous.get(key, {}).get("final_notice_sent")
+                or not signal["confirmed"]
+            ):
                 continue
             await self.event(
                 "provider_" + signal["entry_id"],

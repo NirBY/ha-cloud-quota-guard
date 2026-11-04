@@ -240,5 +240,8 @@
   "Further alerts paused": "התראות נוספות מושהות",
   "Next expected monthly reset": "מועד האיפוס החודשי הצפוי",
   "The provider reset time and timezone are unverified. This date is an estimate, not confirmation that quota has recovered.": "שעת האיפוס ואזור הזמן אצל הספק אינם מאומתים. התאריך הוא הערכה ואינו אישור שהמכסה חודשה.",
-  "{name}: IMOU monthly calls are exhausted. Next expected monthly reset: {reset_date} (provider reset time and timezone unverified). Further alerts for this outage are paused; monitoring continues. Cloud actions may fail until quota recovers.": "{name}: מכסת בקשות IMOU החודשית מוצתה. האיפוס החודשי הבא צפוי ב־{reset_date} (שעת האיפוס ואזור הזמן אצל הספק אינם מאומתים). התראות נוספות לאירוע זה מושהות; הניטור ממשיך. פעולות ענן עלולות להיכשל עד לחידוש המכסה."
+  "{name}: IMOU monthly calls are exhausted. Next expected monthly reset: {reset_date} (provider reset time and timezone unverified). Further alerts for this outage are paused; monitoring continues. Cloud actions may fail until quota recovers.": "{name}: מכסת בקשות IMOU החודשית מוצתה. האיפוס החודשי הבא צפוי ב־{reset_date} (שעת האיפוס ואזור הזמן אצל הספק אינם מאומתים). התראות נוספות לאירוע זה מושהות; הניטור ממשיך. פעולות ענן עלולות להיכשל עד לחידוש המכסה.",
+  "Last report · no active alert": "דיווח אחרון · אין התראה פעילה",
+  "Last reported monthly exhaustion": "דיווח אחרון על מיצוי המכסה",
+  "IMOU previously reported exhausted monthly calls. Waiting for a current provider report.": "IMOU דיווח בעבר על מיצוי מכסת הבקשות החודשית. ממתין לדיווח עדכני מהספק."
 }
