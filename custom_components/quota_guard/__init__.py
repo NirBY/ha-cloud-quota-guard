@@ -543,14 +543,18 @@ class Guard:
                 row["provider_signal"] = signal
         if current == previous:
             return
-        # Save the incident before it can be forwarded by another automation.
+        # An integration reload can briefly clear and recreate the same repair.
+        # Reserve the closing notice per account and quota month before forwarding it.
+        windows = self.data.setdefault("provider_notice_windows", {})
+        notices = []
+        for signal in current.values():
+            account = signal["entry_id"]
+            reset = signal["expected_reset_date"]
+            if signal["confirmed"] and windows.get(account) != reset:
+                windows[account] = reset
+                notices.append(signal)
         await self.store.async_save(self.data)
-        for key, signal in current.items():
-            if (
-                previous.get(key, {}).get("final_notice_sent")
-                or not signal["confirmed"]
-            ):
-                continue
+        for signal in notices:
             await self.event(
                 "provider_" + signal["entry_id"],
                 "provider_quota_exhausted",

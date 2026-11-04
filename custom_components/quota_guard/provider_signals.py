@@ -47,10 +47,9 @@ def signals_for(issues, entries, previous=None):
             "source": "Home Assistant Repairs · IMOU",
             "reported_at": reported.isoformat(),
             "resources_url": url,
-            "expected_reset_date": prior.get("expected_reset_date", reset.isoformat()),
+            "expected_reset_date": reset.isoformat(),
             "reset_time_verified": False,
             "alerts_paused": True,
-            "final_notice_sent": issue.active or prior.get("final_notice_sent", False),
         }
     return result
 

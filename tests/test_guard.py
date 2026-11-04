@@ -222,6 +222,13 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             await self.g.provider_signals_refresh()
             self.assertNotIn("provider_signal", self.g.inventory[0])
             self.assertFalse(self.g.provider_alerts_paused({"entry_ids": ["entry"]}))
+            issues[("imou_life", IMOU_QUOTA_KEY + "_entry")] = issue
+            await self.g.provider_signals_refresh()
+            create.assert_called_once()
+            issue.created = datetime(2026, 12, 3, tzinfo=UTC)
+            await self.g.provider_signals_refresh()
+            self.assertEqual(create.call_count, 2)
+            self.assertIn("2027-01-01", create.call_args.args[1])
 
     async def test_warn_disable_latch_restart(self):
         await self.g.tick()

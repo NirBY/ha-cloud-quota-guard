@@ -115,7 +115,7 @@ IMOU, OpenAI billing/credits and other unconnected providers are shown as needin
 ### IMOU monthly calls
 
 An active `imou_life` monthly quota repair marks the affected account as exhausted.
-Quota Guard sends one closing notification with the next expected reset date and
+Quota Guard sends at most one closing notification per account and quota month with the expected reset date and
 pauses further alerts for that outage, including after a restart. The dashboard
 continues showing the incident and its reset date. IMOU publishes a first-of-month
 renewal schedule. The exact hour and timezone are unspecified. Clearing the repair
