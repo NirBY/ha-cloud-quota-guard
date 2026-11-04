@@ -112,6 +112,16 @@ Google Translate TTS uses an unofficial speech service, separate from Google Clo
 
 IMOU, OpenAI billing/credits and other unconnected providers are shown as needing a source when discovered. They do **not** have automatic quota protection just because their integration appears in the inventory. Provider email reminders are separate from this integration.
 
+### IMOU monthly calls
+
+An active `imou_life` monthly quota repair marks the affected account as exhausted.
+Quota Guard sends one closing notification with the next expected reset date and
+pauses further alerts for that outage, including after a restart. The dashboard
+continues showing the incident and its reset date. IMOU publishes a first-of-month
+renewal schedule. The exact hour and timezone are unspecified. Clearing the repair
+on a loaded integration ends the incident. This signal cannot give an advance
+usage warning. [IMOU renewal schedule](https://open.imoulife.com/price)
+
 ### Usage when the limit is unknown
 
 Omit `limit` and `limit_entity` to monitor verified sensor usage without a quota

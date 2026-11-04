@@ -227,5 +227,18 @@
   "Sources with recent data": "מקורות עם נתונים עדכניים",
   "Sources without a fresh measurement": "מקורות ללא מדידה עדכנית",
   "Card version": "גרסת הכרטיס",
-  "Monitor version": "גרסת המנטר"
+  "Monitor version": "גרסת המנטר",
+  "Provider reports quota exhausted": "הספק מדווח שהמכסה מוצתה",
+  "Previous quota alert · awaiting confirmation": "התראת מכסה קודמת · ממתין לאימות",
+  "Monthly calls exhausted": "מכסת הבקשות החודשית מוצתה",
+  "IMOU has reported quota exhaustion. Exact usage and limit are unavailable; cloud actions may fail.": "IMOU דיווח על מיצוי המכסה. אין נתוני שימוש ומגבלה מספריים; פעולות הענן עלולות להיכשל.",
+  "Provider repair signal": "התראת מכסה מאינטגרציית הספק",
+  "Add quota or wait for the provider month to reset, then reload the IMOU integration. A reminder email does not stop API calls.": "יש להוסיף מכסה או להמתין לאיפוס החודש אצל הספק, ואז לטעון מחדש את אינטגרציית IMOU. התראת מייל אינה עוצרת בקשות API.",
+  "Open Home Assistant Repairs": "פתיחת תיקוני Home Assistant",
+  "Open IMOU My Resources": "פתיחת המשאבים שלי ב־IMOU",
+  "{name}: IMOU reports that monthly Open Platform calls are exhausted. Cloud actions may fail until quota is added or the month resets. No numeric usage or limit was supplied.": "{name}: IMOU דיווח שמכסת בקשות Open Platform החודשית מוצתה. פעולות ענן עלולות להיכשל עד להוספת מכסה או לאיפוס החודש. לא התקבלו נתוני שימוש או מגבלה מספריים.",
+  "Further alerts paused": "התראות נוספות מושהות",
+  "Next expected monthly reset": "מועד האיפוס החודשי הצפוי",
+  "The provider reset time and timezone are unverified. This date is an estimate, not confirmation that quota has recovered.": "שעת האיפוס ואזור הזמן אצל הספק אינם מאומתים. התאריך הוא הערכה ואינו אישור שהמכסה חודשה.",
+  "{name}: IMOU monthly calls are exhausted. Next expected monthly reset: {reset_date} (provider reset time and timezone unverified). Further alerts for this outage are paused; monitoring continues. Cloud actions may fail until quota recovers.": "{name}: מכסת בקשות IMOU החודשית מוצתה. האיפוס החודשי הבא צפוי ב־{reset_date} (שעת האיפוס ואזור הזמן אצל הספק אינם מאומתים). התראות נוספות לאירוע זה מושהות; הניטור ממשיך. פעולות ענן עלולות להיכשל עד לחידוש המכסה."
 }

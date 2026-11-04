@@ -17,5 +17,5 @@
   "requirements": [
     "google-auth[requests]==2.62.0"
   ],
-  "version": "0.5.1"
+  "version": "0.5.2"
 }

@@ -19,6 +19,7 @@ from .engine import crossings, evaluate
 from .google_provider import GoogleProvider
 from .localization import translate
 from .provider_policies import policy_for
+from .provider_signals import collect_signals, subscribe
 from .relationships import collect_relationships
 from .tuya_observer import TuyaObserver
 
@@ -82,6 +83,7 @@ async def async_setup_entry(hass, entry):
     manager = Guard(hass)
     hass.data[DOMAIN] = manager
     await manager.load()
+    entry.async_on_unload(subscribe(hass, manager))
     await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
     entry.async_on_unload(
         async_track_time_interval(hass, manager.tick, timedelta(seconds=60))
@@ -249,6 +251,7 @@ class Guard:
                 id = row["config"]["id"]
                 self.data["metrics"].setdefault(id, {}).update(row)
             await self.inventory_refresh()
+            await self.provider_signals_refresh()
             try:
                 self.relationships = collect_relationships(self.hass)
             except ImportError:
@@ -315,6 +318,9 @@ class Guard:
                         # A successful empty query is a reporting observation, not a
                         # verified zero-use sample. Never enforce or graph it as zero.
                         m["status"] = "no_activity_reported"
+                        self.clear_data_alert(id, m)
+                        continue
+                    if self.provider_alerts_paused(cfg):
                         self.clear_data_alert(id, m)
                         continue
                     message_key = "{name}: measurement is missing or stale; protection cannot be verified"
@@ -515,6 +521,60 @@ class Guard:
                 m.pop("sample", None)
             m.update(row)
 
+    async def provider_signals_refresh(self):
+        """Notify once per active provider failure, separately from numeric quotas."""
+        previous = self.data.get("provider_signals", {})
+        try:
+            current = collect_signals(self.hass, previous)
+        except ImportError:
+            return
+        self.data["provider_signals"] = current
+        for row in self.inventory:
+            row.pop("provider_signal", None)
+            signal = next(
+                (
+                    item
+                    for item in current.values()
+                    if item["entry_id"] == row.get("entry_id")
+                ),
+                None,
+            )
+            if signal:
+                row["provider_signal"] = signal
+        if current == previous:
+            return
+        # Save the incident before it can be forwarded by another automation.
+        await self.store.async_save(self.data)
+        for key, signal in current.items():
+            if key in previous or not signal["confirmed"]:
+                continue
+            await self.event(
+                "provider_" + signal["entry_id"],
+                "provider_quota_exhausted",
+                None,
+                self.text(
+                    signal["message_key"],
+                    name=signal["name"],
+                    reset_date=signal["expected_reset_date"],
+                ),
+            )
+        for key in previous.keys() - current.keys():
+            persistent_notification.async_dismiss(
+                self.hass,
+                "quota_guard_provider_"
+                + previous[key]["entry_id"]
+                + "_provider_quota_exhausted",
+            )
+
+    def provider_alerts_paused(self, config):
+        targets = set(config.get("entry_ids", []))
+        paused = {
+            s["entry_id"]
+            for s in self.data.get("provider_signals", {}).values()
+            if s.get("alerts_paused")
+        }
+        return bool(targets) and targets <= paused
+
     def text(self, message, **values):
         """Use the Home Assistant system language; default to English."""
         language = getattr(getattr(self.hass, "config", None), "language", "en")
@@ -525,10 +585,19 @@ class Guard:
         return self.text(name) if config.get("builtin_name") else name
 
     async def event(self, id, kind, threshold, message):
-        sample = self.data["metrics"][id].get("sample", {})
+        sample = self.data["metrics"].get(id, {}).get("sample", {})
         item = {
             "id": id,
             "kind": kind,
+            "name": self.data["metrics"].get(id, {}).get("config", {}).get("name")
+            or next(
+                (
+                    s["name"]
+                    for s in self.data.get("provider_signals", {}).values()
+                    if "provider_" + s["entry_id"] == id
+                ),
+                id,
+            ),
             "threshold": threshold,
             "detected_at": dt_util.utcnow().isoformat(),
             "source_at": sample.get("timestamp"),
@@ -539,6 +608,9 @@ class Guard:
         self.data["events"] = self.data["events"][-1000:]
         # Persist the threshold latch before sending notifications or changing targets.
         await self.store.async_save(self.data)
+        config = self.data["metrics"].get(id, {}).get("config", {})
+        if kind != "provider_quota_exhausted" and self.provider_alerts_paused(config):
+            return
         self.hass.bus.async_fire("quota_guard_event", item)
         persistent_notification.async_create(
             self.hass,

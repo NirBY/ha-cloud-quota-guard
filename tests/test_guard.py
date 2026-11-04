@@ -167,6 +167,57 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(m["used"], 91)
         self.assertIsNone(m["percent"])
 
+    async def test_one_final_notice_survives_polls_and_restart(self):
+        from unittest.mock import Mock, patch
+
+        from quota_guard.provider_signals import IMOU_QUOTA_KEY, signals_for
+
+        self.entry.domain, self.entry.entry_id, self.entry.title = (
+            "imou_life",
+            "entry",
+            "IMOU",
+        )
+        now = datetime(2026, 11, 4, tzinfo=UTC)
+        issue = types.SimpleNamespace(
+            active=True,
+            translation_key=IMOU_QUOTA_KEY,
+            created=now,
+            learn_more_url=None,
+        )
+        issues = {("imou_life", IMOU_QUOTA_KEY + "_entry"): issue}
+
+        def collect(hass, previous):
+            return signals_for(issues, [self.entry], previous, now)
+
+        self.g.data["metrics"]["test"].pop("sample")
+        self.g.inventory = [{"entry_id": "entry"}]
+        pn = sys.modules["homeassistant.components.persistent_notification"]
+        self.g.hass.bus.async_fire = Mock()
+        with (
+            patch.object(guard, "collect_signals", collect),
+            patch.object(pn, "async_create") as create,
+        ):
+            await self.g.tick()
+            self.assertIn("2026-12-01", create.call_args.args[1])
+            self.assertIn("paused", create.call_args.args[1])
+            self.assertTrue(self.g.inventory[0]["provider_signal"]["confirmed"])
+            self.g.data = json.loads(json.dumps(self.g.data))
+            issue.active = (
+                False  # HA restores non-persistent repairs inactive at startup.
+            )
+            await self.g.tick()
+            self.assertFalse(self.g.inventory[0]["provider_signal"]["confirmed"])
+            issue.active = True
+            await self.g.tick()
+            await self.g.tick()
+            self.assertEqual(create.call_count, 1)
+            self.assertEqual(self.g.hass.bus.async_fire.call_count, 1)
+            self.assertFalse(self.g.provider_alerts_paused({"entry_ids": ["other"]}))
+            issues.clear()
+            await self.g.provider_signals_refresh()
+            self.assertNotIn("provider_signal", self.g.inventory[0])
+            self.assertFalse(self.g.provider_alerts_paused({"entry_ids": ["entry"]}))
+
     async def test_warn_disable_latch_restart(self):
         await self.g.tick()
         self.entries.async_set_disabled_by.assert_not_awaited()

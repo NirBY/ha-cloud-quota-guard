@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2
+
+- Show IMOU monthly call exhaustion in Needs attention, with one closing notice, the expected reset date and a visible pause on further alerts.
+
+
 ## 0.5.1
 
 - Fix upgrades keeping an already registered older dashboard implementation.

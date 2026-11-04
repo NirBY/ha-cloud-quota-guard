@@ -72,3 +72,11 @@ test('loading an upgraded module replaces a legacy registered card without losin
  vm.runInNewContext('(function(){'+older+'})()',scope);
  assert.equal(registered.prototype.usageDetail,upgraded);
 });
+test('a provider repair shows the reset date and paused alerts without a numeric sample',()=>{
+ const card=new Card();card.filter='attention';card.setConfig({language:'he'});
+ const signal={entry_id:'imou',confirmed:true,expected_reset_date:'2026-12-01',source:'Home Assistant Repairs · IMOU',resources_url:'https://open.imoulife.com/consoleNew/resourceManage/myResource'};
+ card.data={metrics:{},events:[],inventory:[{entry_id:'imou',title:'IMOU',domain:'imou_life',coverage:'needs_setup',provider_signal:signal}]};
+ card.shadowRoot={innerHTML:'',querySelector(){return {open:false};},querySelectorAll(){return [];}};
+ card.render();assert.match(card.shadowRoot.innerHTML,/2026-12-01/);assert.match(card.shadowRoot.innerHTML,/התראות נוספות מושהות/);
+ const html=card.detail(card.rows()[0]);assert.match(html,/2026-12-01/);assert.doesNotMatch(html,/<svg|100%/);
+});
