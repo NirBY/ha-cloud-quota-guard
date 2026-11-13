@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+- Add native Configure options and a dashboard form for adding and editing sensor sources, with English and Hebrew labels.
+- Support external services without cutoff targets, reference usage-page links, sensor attributes, separate period/timestamp sensors, and explicitly configured monthly periods.
+- Preserve unknown/stale status when measurements are missing and invalidate prior-month samples at a configured monthly reset.
+- Recognize IMOU OP1013 setup failures without a repair, keep one notice per account/month, and clear inactive historical incidents when the integration recovers.
+- Reject unsafe usage URLs and prevent built-in sources from being overwritten through manual configuration.
+
+
 ## 0.5.2
 
 - Show IMOU monthly call exhaustion in Needs attention, with one closing notice, the expected reset date and a visible pause on further alerts.

@@ -65,6 +65,35 @@ configure:
       required: false
       selector:
         boolean: {}
+    usage_url:
+      required: false
+      selector:
+        text: {}
+    usage_attribute:
+      required: false
+      selector:
+        text: {}
+    period_entity:
+      required: false
+      selector:
+        entity:
+          domain: sensor
+    timestamp_entity:
+      required: false
+      selector:
+        entity:
+          domain: sensor
+    period_mode:
+      required: false
+      selector:
+        select:
+          options:
+          - attribute
+          - monthly
+    period_timezone:
+      required: false
+      selector:
+        text: {}
 report:
   fields:
     id:

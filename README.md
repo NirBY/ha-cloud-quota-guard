@@ -114,13 +114,51 @@ IMOU, OpenAI billing/credits and other unconnected providers are shown as needin
 
 ### IMOU monthly calls
 
-An active `imou_life` monthly quota repair marks the affected account as exhausted.
+An active `imou_life` monthly quota repair or an `OP1013` setup failure marks the affected account as exhausted, even when no repair is available.
 Quota Guard sends at most one closing notification per account and quota month with the expected reset date and
 pauses further alerts for that outage, including after a restart. The dashboard
 continues showing the incident and its reset date. IMOU publishes a first-of-month
 renewal schedule. The exact hour and timezone are unspecified. Clearing the repair
 on a loaded integration ends the incident. This signal cannot give an advance
 usage warning. [IMOU renewal schedule](https://open.imoulife.com/price)
+
+`OP1013` is a provider-side exhausted allowance. Quota Guard reports it; it cannot
+restore allowance or make cloud calls succeed. Recovery requires quota renewal
+or additional allowance from IMOU. Alert suppression does not stop IMOU setup
+retries or change its polling settings.
+
+### Add a sensor source without JSON
+
+Open **Settings → Devices & services → Cloud Quota Guard → Configure → Add sensor
+source**, or click **Add source** on the bundled dashboard. Existing sensor
+sources can be edited through **Configure → Edit source**, or from their dashboard
+details. Both screens support English and Hebrew.
+
+Choose a name, stable source ID, usage sensor and unit. An optional usage-page URL
+links to the original dashboard; its contents are not fetched. Add a fixed
+allowance or an allowance sensor when available. Without a verified allowance,
+the source displays usage without a percentage or automatic cutoff.
+
+The usage sensor must supply a period and a timezone-aware measurement timestamp,
+normally through `period` and `sampled_at` attributes. You can select different
+attribute names, separate period/timestamp sensors, and a numeric usage attribute.
+The screen does not substitute the current time for a missing provider timestamp.
+
+For monthly counters without a period attribute, explicitly choose **Calendar
+month** and the provider's reset timezone. The period is derived from the source
+timestamp. A previous month's sample is not reused after the month changes.
+
+Automatic cutoff is **off by default** in these screens. Monitoring an external
+service does not require a Home Assistant integration mapping. Enabling cutoff
+requires explicitly selected target integrations and only acts on fresh numeric
+measurements. Existing provider-side shutdown controls remain independent.
+
+For the Security Scanner example, select `sensor.security_scanner_free_usage`,
+unit `%`, allowance `100`, timestamp attribute `checked_at`, and your verified
+monthly reset timezone. Link `/security-scanner/usage` and name the source
+**Oracle free-tier safety estimate**: this is a conservative estimate with a
+reporting reserve, not a provider billing counter. Leave Quota Guard cutoff off;
+the scanner has its own shutdown policy. See [example configuration](examples/security-scanner.yaml).
 
 ### Usage when the limit is unknown
 

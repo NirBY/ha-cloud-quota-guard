@@ -1,0 +1,18 @@
+# Equivalent to the Add source form. Verify the reset timezone with your monitor.
+# Usage is a conservative estimate, not Oracle's final billing counter.
+action: quota_guard.configure
+data:
+  id: security_scanner_estimate
+  name: Oracle free-tier safety estimate
+  source: Security Scanner monthly estimate with reporting reserve
+  usage_url: /security-scanner/usage
+  usage_entity: sensor.security_scanner_free_usage
+  kind: free_allowance
+  unit: "%"
+  limit: 100
+  timestamp_attribute: checked_at
+  period_mode: monthly
+  period_timezone: UTC
+  max_age: 900
+  entry_ids: []
+  enforce: false

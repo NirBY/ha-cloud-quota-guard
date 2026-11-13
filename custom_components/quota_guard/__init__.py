@@ -21,6 +21,7 @@ from .localization import translate
 from .provider_policies import policy_for
 from .provider_signals import collect_signals, subscribe
 from .relationships import collect_relationships
+from .source_config import period_timezone, sensor_sample, usage_url
 from .tuya_observer import TuyaObserver
 
 DOMAIN = "quota_guard"
@@ -32,8 +33,16 @@ SCHEMA = vol.Schema(
         vol.Required("kind"): vol.In(["free_allowance", "rate_limit", "budget"]),
         vol.Required("source"): cv.string,
         vol.Required("unit"): cv.string,
+        vol.Optional("usage_url"): usage_url,
         vol.Optional("usage_entity"): cv.entity_id,
+        vol.Optional("usage_attribute"): cv.string,
         vol.Optional("limit_entity"): cv.entity_id,
+        vol.Optional("period_entity"): cv.entity_id,
+        vol.Optional("timestamp_entity"): cv.entity_id,
+        vol.Optional("period_mode", default="attribute"): vol.In(
+            ["attribute", "monthly"]
+        ),
+        vol.Optional("period_timezone", default="UTC"): period_timezone,
         vol.Optional("limit"): vol.All(vol.Coerce(float), vol.Range(min=0.000001)),
         vol.Optional("period_attribute", default="period"): cv.string,
         vol.Optional("timestamp_attribute", default="sampled_at"): cv.string,
@@ -148,7 +157,7 @@ class Guard:
 
     async def configure(self, call):
         cfg = dict(call.data)
-        if not cfg["entry_ids"]:
+        if cfg.get("enforce", True) and not cfg["entry_ids"]:
             raise vol.Invalid("At least one target integration is required")
         for id in cfg["entry_ids"]:
             e = self.hass.config_entries.async_get_entry(id)
@@ -156,6 +165,37 @@ class Guard:
                 raise vol.Invalid("Invalid target integration")
         async with self.lock:
             old = self.data["metrics"].get(cfg["id"], {})
+            old_config = old.get("config", {})
+            if old_config.get("builtin_name") or (
+                cfg["id"].startswith("github_")
+                and old_config.get("source") == "https://api.github.com/rate_limit"
+            ):
+                raise vol.Invalid("Built-in provider sources cannot be overwritten")
+            # A changed source must supply a new sample before it can enforce a cutoff.
+            measurement_fields = (
+                "source",
+                "unit",
+                "kind",
+                "usage_entity",
+                "usage_attribute",
+                "limit",
+                "limit_entity",
+                "period_attribute",
+                "period_entity",
+                "timestamp_attribute",
+                "timestamp_entity",
+                "period_mode",
+                "period_timezone",
+            )
+            if any(
+                old.get("config", {}).get(k) != cfg.get(k) for k in measurement_fields
+            ):
+                old = {
+                    k: v
+                    for k, v in old.items()
+                    if k
+                    in ("points", "notified", "period", "last_percent", "cutoff_result")
+                }
             self.data["metrics"][cfg["id"]] = {
                 **old,
                 "config": cfg,
@@ -262,22 +302,7 @@ class Guard:
             for id, m in self.data["metrics"].items():
                 cfg = m["config"]
                 if cfg.get("usage_entity"):
-                    s = self.hass.states.get(cfg["usage_entity"])
-                    lim = (
-                        self.hass.states.get(cfg.get("limit_entity", ""))
-                        if cfg.get("limit_entity")
-                        else None
-                    )
-                    m["sample"] = {
-                        "used": s.state if s else None,
-                        "limit": lim.state if lim else cfg.get("limit"),
-                        "period": s.attributes.get(cfg["period_attribute"])
-                        if s
-                        else None,
-                        "timestamp": s.attributes.get(cfg["timestamp_attribute"])
-                        if s
-                        else None,
-                    }
+                    m["sample"] = sensor_sample(cfg, self.hass.states, now)
                 sample = m.get("sample", {})
                 decision = evaluate(sample, now, cfg["max_age"])
                 old_status = m.get("status")

@@ -178,6 +178,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             "IMOU",
         )
         now = datetime(2026, 11, 4, tzinfo=UTC)
+        self.entry.state.value = "not_loaded"
         issue = types.SimpleNamespace(
             active=True,
             translation_key=IMOU_QUOTA_KEY,
@@ -219,6 +220,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self.g.hass.bus.async_fire.call_count, 1)
             self.assertFalse(self.g.provider_alerts_paused({"entry_ids": ["other"]}))
             issues.clear()
+            self.entry.state.value = "loaded"
             await self.g.provider_signals_refresh()
             self.assertNotIn("provider_signal", self.g.inventory[0])
             self.assertFalse(self.g.provider_alerts_paused({"entry_ids": ["entry"]}))
@@ -229,6 +231,52 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             await self.g.provider_signals_refresh()
             self.assertEqual(create.call_count, 2)
             self.assertIn("2027-01-01", create.call_args.args[1])
+
+    async def test_standalone_sensor_monitoring_does_not_require_cutoff_target(self):
+        config = guard.SCHEMA(
+            {
+                "id": "external",
+                "name": "External service",
+                "entry_ids": [],
+                "kind": "free_allowance",
+                "source": "sensor.usage",
+                "unit": "requests",
+                "usage_entity": "sensor.usage",
+                "limit": 100,
+                "enforce": False,
+            }
+        )
+        self.g.hass.states = {
+            "sensor.usage": types.SimpleNamespace(
+                state="96",
+                attributes={"period": "2026-11", "sampled_at": dt.utcnow().isoformat()},
+            )
+        }
+        await self.g.configure(types.SimpleNamespace(data=config))
+        self.assertEqual(self.g.data["metrics"]["external"]["percent"], 96)
+        self.entries.async_set_disabled_by.assert_not_awaited()
+        config["enforce"] = True
+        with self.assertRaises(guard.vol.Invalid):
+            await self.g.configure(types.SimpleNamespace(data=config))
+
+    async def test_reconfigured_sensor_cannot_enforce_old_sample(self):
+        self.g.hass.states = {}
+        config = guard.SCHEMA(
+            {
+                "id": "test",
+                "name": "New source",
+                "entry_ids": ["entry"],
+                "kind": "free_allowance",
+                "source": "New provider",
+                "unit": "requests",
+                "usage_entity": "sensor.missing",
+                "limit": 100,
+            }
+        )
+        self.g.data["metrics"]["test"]["sample"]["used"] = 99
+        await self.g.configure(types.SimpleNamespace(data=config))
+        self.assertIsNone(self.g.data["metrics"]["test"]["percent"])
+        self.entries.async_set_disabled_by.assert_not_awaited()
 
     async def test_warn_disable_latch_restart(self):
         await self.g.tick()

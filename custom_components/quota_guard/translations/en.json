@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Cloud Quota Guard",
-        "description": "Discover cloud integrations and monitor verified quota sources. Automatically reads supported existing GitHub and Google credentials locally. Warns at 90% and disables mapped integrations at 95%. Missing sources are not protected. The bundled dashboard currently uses Hebrew."
+        "description": "Discover cloud integrations and monitor quota sources. Warns at 90% and disables explicitly mapped integrations at 95%. Add sensor sources using Configure. Missing sources are not protected."
       }
     },
     "abort": {
@@ -67,6 +67,30 @@
         "enforce": {
           "name": "Disable at 95%",
           "description": "Disable explicitly mapped integrations at 95%; never automatically re-enable them."
+        },
+        "usage_url": {
+          "name": "Usage page URL",
+          "description": "Optional HTTP(S) URL or local dashboard path. This is a reference link, not an automatically scraped data source."
+        },
+        "usage_attribute": {
+          "name": "Usage attribute",
+          "description": "Optional numeric attribute on the usage sensor; leave blank to read its state."
+        },
+        "period_entity": {
+          "name": "Period sensor",
+          "description": "Optional sensor whose state contains the provider period ID. Overrides the period attribute."
+        },
+        "timestamp_entity": {
+          "name": "Timestamp sensor",
+          "description": "Optional sensor whose state contains the timezone-aware provider timestamp. Overrides the timestamp attribute."
+        },
+        "period_mode": {
+          "name": "Reporting period",
+          "description": "Read a provider period from a sensor, or explicitly select a calendar month derived from the source timestamp."
+        },
+        "period_timezone": {
+          "name": "Month reset timezone",
+          "description": "Provider timezone for calendar-month periods, for example UTC or Asia/Jerusalem. Samples from an earlier month are not reused."
         }
       }
     },
@@ -94,6 +118,92 @@
           "name": "Source timestamp",
           "description": "Timezone-aware ISO 8601 timestamp of the provider measurement."
         }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Manage quota sources",
+        "menu_options": {
+          "add": "Add sensor source",
+          "edit": "Edit source"
+        }
+      },
+      "edit": {
+        "title": "Choose a source",
+        "data": {
+          "source_id": "Source"
+        }
+      },
+      "source": {
+        "title": "Sensor quota source",
+        "description": "Choose a usage sensor, optional allowance and measurement timestamp. A usage-page URL is a reference link. Automatic cutoff is off by default.",
+        "data": {
+          "id": "Metric ID",
+          "name": "Name",
+          "entry_ids": "Target integration IDs",
+          "kind": "Quota type",
+          "unit": "Unit",
+          "usage_entity": "Usage sensor",
+          "limit_entity": "Limit sensor",
+          "limit": "Fixed allowance",
+          "period_attribute": "Period attribute",
+          "timestamp_attribute": "Timestamp attribute",
+          "max_age": "Maximum age",
+          "enforce": "Disable at 95%",
+          "usage_url": "Usage page URL",
+          "usage_attribute": "Usage attribute",
+          "period_entity": "Period sensor",
+          "timestamp_entity": "Timestamp sensor",
+          "period_mode": "Reporting period",
+          "period_timezone": "Month reset timezone"
+        },
+        "data_description": {
+          "id": "Stable lowercase identifier (letters, digits and underscores).",
+          "name": "Human-readable quota name.",
+          "entry_ids": "Config entry IDs to disable at the cutoff; cannot target Quota Guard itself.",
+          "kind": "Distinguish a rate limit, free allowance, or monetary budget.",
+          "unit": "For example requests, characters, or USD.",
+          "usage_entity": "Current-period usage sensor with period and source timestamp attributes.",
+          "limit_entity": "Optional sensor exposing the effective allowance.",
+          "limit": "A verified allowance if no limit sensor is available.",
+          "period_attribute": "Usage sensor attribute containing the provider period ID.",
+          "timestamp_attribute": "Usage sensor attribute with the timezone-aware source timestamp.",
+          "max_age": "Seconds until a measurement is considered stale (30–86400).",
+          "enforce": "Disable explicitly mapped integrations at 95%; never automatically re-enable them.",
+          "usage_url": "Optional HTTP(S) URL or local dashboard path. This is a reference link, not an automatically scraped data source.",
+          "usage_attribute": "Optional numeric attribute on the usage sensor; leave blank to read its state.",
+          "period_entity": "Optional sensor whose state contains the provider period ID. Overrides the period attribute.",
+          "timestamp_entity": "Optional sensor whose state contains the timezone-aware provider timestamp. Overrides the timestamp attribute.",
+          "period_mode": "Read a provider period from a sensor, or explicitly select a calendar month derived from the source timestamp.",
+          "period_timezone": "Provider timezone for calendar-month periods, for example UTC or Asia/Jerusalem. Samples from an earlier month are not reused."
+        }
+      }
+    },
+    "error": {
+      "duplicate_id": "This source ID already exists.",
+      "sensor_missing": "Choose an existing sensor.",
+      "targets_required": "Choose integrations for automatic cutoff.",
+      "invalid_source": "Check the source ID, URL, timezone and measurement settings."
+    },
+    "abort": {
+      "not_loaded": "Load Cloud Quota Guard before configuring sources.",
+      "no_sources": "No sensor sources to edit. Add a source first."
+    }
+  },
+  "selector": {
+    "quota_kind": {
+      "options": {
+        "free_allowance": "Free allowance",
+        "rate_limit": "API rate limit",
+        "budget": "Budget"
+      }
+    },
+    "period_mode": {
+      "options": {
+        "attribute": "From sensor",
+        "monthly": "Calendar month"
       }
     }
   }

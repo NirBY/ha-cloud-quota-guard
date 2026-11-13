@@ -80,3 +80,31 @@ test('a provider repair shows the reset date and paused alerts without a numeric
  card.render();assert.match(card.shadowRoot.innerHTML,/2026-12-01/);assert.match(card.shadowRoot.innerHTML,/התראות נוספות מושהות/);
  const html=card.detail(card.rows()[0]);assert.match(html,/2026-12-01/);assert.doesNotMatch(html,/<svg|100%/);
 });
+
+function manualSourceCard(){const card=new Card();card._hass={states:{'sensor.usage':{state:'39.914',attributes:{checked_at:new Date().toISOString()}}}};card.editorDraft={id:'scanner',name:'Oracle safety estimate',unit:'%',kind:'free_allowance',usage_entity:'sensor.usage',usage_url:'/security-scanner/usage',limit:'100',timestamp_attribute:'checked_at',period_mode:'monthly',period_timezone:'UTC',max_age:'900',enforce:false,entry_ids:[]};return card;}
+test('the source form builds a sensor monitor without a cutoff target',()=>{
+ const card=manualSourceCard(),cfg=card.sourceConfig(card.editorDraft);
+ assert.equal(cfg.enforce,false);assert.equal(cfg.entry_ids.length,0);assert.equal(cfg.limit,100);assert.equal(cfg.period_mode,'monthly');assert.equal(cfg.usage_url,'/security-scanner/usage');
+ assert.match(card.sourceEditor(),/name="usage_entity"/);assert.match(card.previewSource(),/39.914/);assert.match(card.previewSource(),/\d{4}-\d{2}/);
+});
+test('source validation rejects unsafe links, absent sensors and unmapped cutoff',()=>{
+ const card=manualSourceCard();
+ for(const change of [{usage_url:'javascript:alert(1)'},{usage_url:'https://user:pass@example.com/'},{enforce:true},{usage_entity:'sensor.absent'},{limit:'NaN'},{max_age:5}])assert.throws(()=>card.sourceConfig({...card.editorDraft,...change}));
+ assert.equal(card.safeUsageUrl('//evil.example'), '');assert.equal(card.safeUsageUrl('/\\evil.example'), '');
+});
+test('source link and editor escape user labels and retain missing data',()=>{
+ const card=manualSourceCard();card.editorDraft.name='<img src=x onerror=alert(1)>';
+ assert.doesNotMatch(card.sourceEditor(),/<img src=x/);
+ delete card._hass.states['sensor.usage'];assert.match(card.previewSource(),/Missing/);
+ assert.equal(card.sourceLink({config:{usage_url:'javascript:alert(1)'}}),'');
+ assert.match(card.sourceLink({config:{usage_url:'/security-scanner/usage'}}),/rel="noopener noreferrer"/);
+});
+
+test('a selected limit sensor takes precedence and cannot fall back to an old fixed allowance',()=>{
+ const card=new Card(),metric={config:{limit:100,limit_entity:'sensor.limit'},sample:{limit:'200'}};
+ assert.equal(card.limit(metric),200);metric.sample.limit='unavailable';assert.equal(card.limit(metric),null);metric.sample.limit=null;assert.equal(card.limit(metric),null);
+});
+test('refresh keeps a source draft and its focused controls intact',async()=>{
+ const card=new Card();card.editorOpen=true;card.editorDraft={name:'Unsaved source'};let renders=0;card.render=()=>renders++;card._hass={callWS:async()=>({metrics:{},inventory:[]})};
+ await card.refresh();assert.equal(card.editorDraft.name,'Unsaved source');assert.equal(renders,0);assert.equal(card.loading,false);
+});
