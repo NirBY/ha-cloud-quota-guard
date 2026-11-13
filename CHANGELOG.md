@@ -2,6 +2,7 @@
 
 ## 0.6.0
 
+- Save configuration and evaluate submitted/sensor measurements without waiting for slow cloud polls; skip overlapping polls.
 - Add native Configure options and a dashboard form for adding and editing sensor sources, with English and Hebrew labels.
 - Support external services without cutoff targets, reference usage-page links, sensor attributes, separate period/timestamp sensors, and explicitly configured monthly periods.
 - Preserve unknown/stale status when measurements are missing and invalidate prior-month samples at a configured monthly reset.

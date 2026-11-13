@@ -1,5 +1,6 @@
 """Exercise real orchestration against an in-memory HA service boundary."""
 
+import asyncio
 import importlib.util
 import json
 import sys
@@ -277,6 +278,46 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         await self.g.configure(types.SimpleNamespace(data=config))
         self.assertIsNone(self.g.data["metrics"]["test"]["percent"])
         self.entries.async_set_disabled_by.assert_not_awaited()
+
+    async def test_configuration_and_sensor_evaluation_do_not_wait_for_cloud_poll(self):
+        started, release = asyncio.Event(), asyncio.Event()
+
+        async def slow_provider():
+            started.set()
+            await release.wait()
+
+        self.g.google_samples = AsyncMock(side_effect=slow_provider)
+        self.g.hass.states = {
+            "sensor.usage": types.SimpleNamespace(
+                state="12",
+                attributes={"period": "current", "sampled_at": dt.utcnow().isoformat()},
+            )
+        }
+        task = asyncio.create_task(self.g.tick())
+        try:
+            await asyncio.wait_for(started.wait(), 1)
+            config = guard.SCHEMA(
+                {
+                    "id": "external",
+                    "name": "External",
+                    "entry_ids": [],
+                    "kind": "free_allowance",
+                    "source": "sensor.usage",
+                    "unit": "requests",
+                    "usage_entity": "sensor.usage",
+                    "limit": 100,
+                    "enforce": False,
+                }
+            )
+            await asyncio.wait_for(
+                self.g.configure(types.SimpleNamespace(data=config)), 1
+            )
+            self.assertEqual(self.g.data["metrics"]["external"]["percent"], 12)
+            await asyncio.wait_for(self.g.tick(), 1)
+            self.g.google_samples.assert_awaited_once()
+        finally:
+            release.set()
+            await task
 
     async def test_warn_disable_latch_restart(self):
         await self.g.tick()

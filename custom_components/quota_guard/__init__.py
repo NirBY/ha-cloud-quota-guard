@@ -128,6 +128,7 @@ class Guard:
         self.inventory = []
         self.listeners = []
         self.lock = asyncio.Lock()
+        self.poll_lock = asyncio.Lock()
         self.google = GoogleProvider()
         self.tuya = TuyaObserver()
         self.relationships = {"available": False, "entries": {}}
@@ -202,7 +203,7 @@ class Guard:
                 "status": "unknown",
             }
             await self.store.async_save(self.data)
-        await self.tick()
+        await self.tick(refresh_providers=False)
 
     async def report(self, call):
         async with self.lock:
@@ -223,7 +224,7 @@ class Guard:
                 raise vol.Invalid("Out-of-order sample rejected")
             metric["sample"] = sample
             await self.store.async_save(self.data)
-        await self.tick()
+        await self.tick(refresh_providers=False)
 
     async def inventory_refresh(self):
         rows = []
@@ -283,7 +284,21 @@ class Guard:
                     }
                 )
 
-    async def tick(self, *_):
+    async def tick(self, *_, refresh_providers=True):
+        """Keep slow provider requests out of the configuration/storage lock."""
+        if refresh_providers:
+            # Skip overlapping scheduled polls instead of building a request queue.
+            if self.poll_lock.locked():
+                return
+            async with self.poll_lock:
+                await self.github_samples(dt_util.utcnow())
+                await self.google_samples()
+                await self.evaluate_metrics()
+        else:
+            await self.evaluate_metrics()
+
+    async def evaluate_metrics(self):
+        """Evaluate locally available samples without querying cloud providers."""
         async with self.lock:
             for row in self.tuya.collect(
                 self.hass.config_entries.async_entries(), self.data["metrics"]
@@ -297,8 +312,6 @@ class Guard:
             except ImportError:
                 self.relationships = {"available": False, "entries": {}}
             now = dt_util.utcnow()
-            await self.github_samples(now)
-            await self.google_samples()
             for id, m in self.data["metrics"].items():
                 cfg = m["config"]
                 if cfg.get("usage_entity"):
