@@ -1,0 +1,28 @@
+blueprint:
+  name: Cloud Quota Guard — add English dashboard view
+  description: >-
+    Add a full-width Cloud Quotas view to the selected existing, editable dashboard.
+    Requires Cloud Quota Guard 0.10.0 or later. Creates the view once and preserves
+    existing views and later edits. Runs at Home Assistant startup; use Run actions
+    on the created automation to add it immediately. This does not configure
+    provider credentials, budgets or automatic cutoff. For an automatically
+    generated or YAML dashboard, create a new empty editable dashboard first.
+  domain: automation
+  source_url: https://github.com/NirBY/ha-cloud-quota-guard/blob/main/blueprints/automation/quota_guard/add_english_view.yaml
+  input:
+    dashboard_path:
+      name: Dashboard URL path
+      description: >-
+        The path before the view name, without slashes or hostname. For example,
+        dashboard-cloud-quotas for /dashboard-cloud-quotas/home, or lovelace for
+        /lovelace/home. The dashboard must already exist and have editable views.
+      selector:
+        text:
+triggers:
+  - trigger: homeassistant
+    event: start
+actions:
+  - action: quota_guard.add_dashboard_view
+    data:
+      dashboard_path: !input dashboard_path
+mode: single

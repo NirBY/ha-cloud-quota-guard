@@ -29,7 +29,7 @@ services = yaml.safe_load((COMPONENT / "services.yaml").read_text(encoding="utf-
 assert (
     set(services)
     == set(strings["services"])
-    == {"configure", "report", "acknowledge_retired"}
+    == {"configure", "report", "acknowledge_retired", "add_dashboard_view"}
 )
 for service, data in services.items():
     assert set(data["fields"]) == set(strings["services"][service]["fields"])

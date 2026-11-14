@@ -7,22 +7,92 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=NirBY&repository=ha-cloud-quota-guard&category=integration)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Cloud Quota Guard is a **custom Home Assistant integration**, distributed through HACS, with a bundled dashboard card. It monitors cloud usage with user-configurable warning and cutoff percentages (defaults **90% / 95%**). Optional cutoff disables selected Home Assistant integrations or powers off explicitly selected Oracle compute instances.
+Cloud Quota Guard is a **custom Home Assistant integration**, distributed through HACS, with a bundled dashboard card. Configure warning and critical values as **percentages, usage amounts, or low balances**. Alerts work without a verified allowance. Optional cutoff disables selected Home Assistant integrations, powers off selected Oracle instances, or applies supported provider controls. All automatic actions default to **off**.
 
-**Unknown is never zero.** A service with no verified quota source is clearly labeled as unknown and is not protected. Disabling a Home Assistant integration is not a provider-side spending cap.
+**Unknown is never zero.** Discovery is not a usage measurement. Supported request counters appear automatically; unrelated cloud integrations do not appear as broken quota monitors. Disabling a Home Assistant integration is not a provider-side spending cap.
 
 English is the dashboard's default and fallback language, including when Home Assistant uses Hebrew. Set `language: he` for Hebrew/right-to-left, or explicitly choose `language: auto` to follow your profile. Native Home Assistant forms follow the profile language. Source entity names default to English; user-defined names are preserved. Notifications follow the Home Assistant system language.
 
 ## Setup help
 
+New in 0.10: [automatic request counters](#automatic-request-counters),
+[usage/low-balance alerts and provider cutoff](docs/usage-and-controls.md),
+and an [English view installer](#english-dashboard-view).
+
 The **? / Help** button in Home Assistant opens this README. Choose the form you
-are filling in: [GitHub](#setup-help-github), [Google](#setup-help-google), or
-[existing sensor](#setup-help-sensor).
+are filling in: [GitHub](#setup-help-github), [Google](#setup-help-google),
+[AI services](#setup-help-ai), [Tuya / IMOU](#setup-help-tuya),
+[existing sensor](#setup-help-sensor), or [automatic counters](#automatic-request-counters).
 
 Open **Settings → Devices & services → Cloud Quota Guard → Configure**. **Connection
 name** is a label you choose, such as `Personal GitHub` or `Home Google project`;
 it is not a username or password. Enter credentials directly in Home Assistant.
 Do not put tokens or private keys in GitHub issues, chat messages or screenshots.
+
+### Setup help AI
+
+Choose **Configure → AI services**, then a provider and API/team or personal account
+path. The [credential and usage table](docs/usage-and-controls.md#ai-services-personal-subscriptions-tuya-and-imou)
+explains exactly which key and account each form supports. Personal subscription
+limits may require an existing sensor or a manual reading.
+
+<a id="setup-help-openai"></a><a id="setup-help-google_ai"></a><a id="setup-help-claude"></a><a id="setup-help-cursor"></a><a id="setup-help-deepseek"></a><a id="setup-help-grok"></a><a id="setup-help-meta_ai"></a><a id="setup-help-openrouter"></a><a id="setup-help-mistral"></a>
+
+For all AI forms, enter a descriptive **connection name** and the credentials in
+their separate fields. Read [the provider-specific setup table](docs/usage-and-controls.md#ai-services-personal-subscriptions-tuya-and-imou)
+before choosing an API key. Credentials remain in Quota Guard's own config entry.
+
+### Setup help Tuya
+
+### Setup help IMOU
+
+Open **Configure → Tuya usage** or **IMOU usage**. Connect an existing sensor, enter
+an actual console reading, or update a saved reading. These forms do not borrow
+another integration's credentials or invent a provider counter. See
+[usage sources and IMOU exhaustion](docs/usage-and-controls.md#ai-services-personal-subscriptions-tuya-and-imou).
+
+### Setup help manual
+
+Enter the value, unit, real reporting period and timezone-aware timestamp of the
+reading. A remaining balance can only be converted into used allowance when that
+allowance is known. Personal app readings must be updated manually; saving a form
+does not create an automatic account API.
+
+## Automatic request counters
+
+Supported Mashov, Life360, Xiaomi Cloud Map Extractor and Meitav clients are
+discovered automatically on first install and when added later. No extra API key
+is needed. Counters measure this Home Assistant instance's observed HTTP requests,
+including retries and redirects, and are labelled as partial UTC days. They do
+not reveal provider allowances or billable usage. Other integrations need a
+supported owned-session interface or an existing usage sensor.
+
+See [supported versions, gaps, persistence and the author interface](docs/usage-and-controls.md#automatic-request-counters).
+Use **Configure → Warning and critical alerts** to set amounts such as 100 / 200
+requests without a known quota. Automatic cutoff remains off until configured.
+
+## English dashboard view
+
+Choose **Configure → Add English dashboard view**, then an existing editable
+dashboard. The action appends the Cloud Quotas view once and preserves existing views.
+Create an editable dashboard first if you only have an automatically generated one.
+
+For installation through an automation, import
+[the Add English view blueprint](blueprints/automation/quota_guard/add_english_view.yaml),
+select the dashboard URL path and run the automation's actions once. It also runs
+at Home Assistant startup; repeated runs do not duplicate the view. This is an
+automation blueprint that installs a Lovelace view, not a Lovelace blueprint type.
+The direct admin action is `quota_guard.add_dashboard_view` with `dashboard_path`.
+
+The following screenshots use **synthetic demonstration data only**, with no
+personal accounts, device identifiers, credentials or family information.
+
+![English dashboard with observed HTTP counters](docs/screenshots/overview.jpg)
+
+![Request history, thresholds and monitoring scope](docs/screenshots/counter-details.jpg)
+
+Reproduce the demo by serving the repository locally and opening
+[examples/demo.html](examples/demo.html). It uses the actual bundled card.
 
 ### Setup help GitHub
 

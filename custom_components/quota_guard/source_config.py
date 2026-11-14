@@ -1,6 +1,6 @@
 """Read explicitly configured sensor measurements without inventing freshness."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -76,6 +76,23 @@ def sensor_sample(config, states, now=None):
     }
     if sample["period"] in ("unknown", "unavailable", ""):
         sample["period"] = None
+    if config.get("timestamp_mode") == "state_reported" and usage is not None:
+        reported = getattr(usage, "last_reported", None)
+        sample["timestamp"] = reported.isoformat() if reported else None
+    if config.get("period_mode") == "daily":
+        try:
+            zone = ZoneInfo(config.get("period_timezone", "UTC"))
+            today = (now or datetime.now(UTC)).astimezone(zone)
+            day = str(sample["period"])
+            if day != today.date().isoformat():
+                sample["period"] = None
+            else:
+                sample["expires_at"] = (
+                    today.replace(hour=0, minute=0, second=0, microsecond=0)
+                    + timedelta(days=1)
+                ).isoformat()
+        except (ValueError, TypeError, ZoneInfoNotFoundError):
+            sample["period"] = None
     if config.get("period_mode") == "monthly":
         sample["period"] = None
         try:

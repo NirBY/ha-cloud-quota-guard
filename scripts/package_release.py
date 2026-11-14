@@ -19,6 +19,10 @@ def build_archive(destination):
     expected = {p.relative_to(ROOT).as_posix(): p.read_bytes() for p in files}
     for name in ("README.md", "LICENSE", "CHANGELOG.md", "examples/dashboard.yaml"):
         expected[name] = (ROOT / name).read_bytes()
+    for folder in ("docs", "blueprints"):
+        for file in (ROOT / folder).rglob("*"):
+            if file.is_file():
+                expected[file.relative_to(ROOT).as_posix()] = file.read_bytes()
     with ZipFile(destination, "w", ZIP_DEFLATED) as archive:
         for name, content in expected.items():
             archive.writestr(name, content)

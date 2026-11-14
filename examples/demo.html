@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cloud Quota Guard — demonstration</title>
+<style>body{margin:0;padding:24px;background:#0c131f;color:#e9eef6;font:16px Arial,sans-serif}header{max-width:1480px;margin:0 auto 20px}header p{color:#b3c2d7}quota-guard-card{display:block;max-width:1480px;margin:auto}</style>
+<header><h1>Cloud Quota Guard</h1><p>Demonstration · synthetic data only · no accounts or credentials</p></header>
+<quota-guard-card></quota-guard-card>
+<script src="../custom_components/quota_guard/frontend/quota-guard-card.js"></script>
+<script>
+const now=new Date(),stamp=now.toISOString(),period=stamp.slice(0,10);
+function metric(id,name,used,unit,limit=null,extras={}){
+ const config={id,name,unit,kind:'budget',source:'Demonstration data',entry_ids:[],max_age:86400,enforce:false,...extras};
+ const percent=limit?used/limit*100:null;
+ const status=config.threshold_mode==='above'?(used>=config.critical_value?'cutoff':used>=config.warning_value?'warning':'ok'):percent===null?'usage_only':percent>=95?'cutoff':percent>=90?'warning':'ok';
+ return {config,sample:{used,limit,timestamp:stamp,period},status,percent,used,remaining:limit?limit-used:null,points:Array.from({length:24},(_,i)=>({at:new Date(now-(23-i)*600000).toISOString(),source_at:new Date(now-(23-i)*600000).toISOString(),used:Math.round(used*(i+1)/24),percent:percent===null?null:percent*(i+1)/24,period}))};
+}
+const metrics={
+ demo_github:metric('demo_github','GitHub REST',630,'requests',5000),
+ demo_openai:metric('demo_openai','OpenAI — API project',24,'USD',50),
+ demo_mashov:metric('demo_mashov','Mashov — HTTP requests today',128,'requests',null,{threshold_mode:'above',warning_value:100,critical_value:200,automatic_counter:true}),
+ demo_life360:metric('demo_life360','Life360 — HTTP requests today',47,'requests',null,{automatic_counter:true}),
+ demo_xiaomi:metric('demo_xiaomi','Xiaomi Cloud Map Extractor — HTTP requests today',62,'requests',null,{automatic_counter:true}),
+ demo_meitav:metric('demo_meitav','Meitav Tariff Sync — HTTP requests today',2,'requests',null,{automatic_counter:true}),
+};
+for(const m of Object.values(metrics))if(m.config.automatic_counter)m.counter={state:'observing',partial_period:true,first_observed:new Date(now-4*3600000).toISOString()};
+const data={metrics,inventory:[],events:[],retired_metrics:{},relationships:{available:true,entries:{}},remote_controls:{}};
+const card=document.querySelector('quota-guard-card');
+card.setConfig({type:'custom:quota-guard-card',language:'en'});
+card.hass={language:'en',locale:{language:'en'},states:{},callWS:async()=>data};
+</script></html>

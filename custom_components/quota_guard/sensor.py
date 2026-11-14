@@ -6,7 +6,8 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
-from .engine import evaluate
+from .ai_provider import AI_SERVICES, AUTOMATIC
+from .engine import evaluate_config
 
 DOMAIN = "quota_guard"
 HELP_URL = (
@@ -20,21 +21,31 @@ def source_device(guard, metric_id):
     provider_id = config.get("provider_id")
     if provider_id and provider_id in guard.providers:
         return provider_device(guard, provider_id)
+    manual = config.get("source", "").endswith(" — manually entered reading")
     return {
         "identifiers": {(DOMAIN, "source:" + metric_id)},
         "name": config["name"],
         "manufacturer": "Cloud Quota Guard",
-        "model": "Sensor source" if config.get("usage_entity") else "Reported source",
+        "model": "Observed HTTP requests"
+        if config.get("automatic_counter")
+        else "Sensor source"
+        if config.get("usage_entity")
+        else "Manual reading"
+        if manual
+        else "Reported source",
         "entry_type": dr.DeviceEntryType.SERVICE,
-        "configuration_url": HELP_URL + "-sensor",
+        "configuration_url": HELP_URL + ("-manual" if manual else "-sensor"),
     }
 
 
 def provider_device(guard, provider_id):
     provider = guard.providers[provider_id]
-    title = {"github": "GitHub", "google": "Google", "oracle": "Oracle"}[
-        provider["type"]
-    ]
+    title = {
+        "github": "GitHub",
+        "google": "Google",
+        "oracle": "Oracle",
+        **{key: value[0] for key, value in AI_SERVICES.items()},
+    }[provider["type"]]
     return {
         "identifiers": {(DOMAIN, "provider:" + provider_id)},
         "name": title + " — " + provider["name"],
@@ -43,6 +54,7 @@ def provider_device(guard, provider_id):
             "github": "REST core quota",
             "google": "Project API quotas",
             "oracle": "Free Tier usage and compute power-off",
+            **{key: "Account reporting API" for key in AUTOMATIC},
         }[provider["type"]],
         "entry_type": dr.DeviceEntryType.SERVICE,
         "configuration_url": HELP_URL + "-" + provider["type"],
@@ -135,7 +147,7 @@ class Connection(SourceEntity):
         ]
         expected = (
             1
-            if provider["type"] == "github"
+            if provider["type"] == "github" or provider["type"] in AUTOMATIC
             else len(
                 provider["meters"]
                 if provider["type"] == "oracle"
@@ -198,12 +210,10 @@ class Usage(SourceEntity):
     def native_value(self):
         if self.metric.get("status") not in FRESH_STATUSES:
             return None
-        decision = evaluate(
+        decision = evaluate_config(
             self.metric.get("sample") or {},
             dt_util.utcnow(),
-            self.metric.get("config", {}).get("max_age", 900),
-            self.metric.get("config", {}).get("warning_percent", 90),
-            self.metric.get("config", {}).get("cutoff_percent", 95),
+            self.metric.get("config", {}),
         )
         return decision.get("used")
 
@@ -225,6 +235,10 @@ class Usage(SourceEntity):
             ),
             "warning_percent": m.get("config", {}).get("warning_percent", 90),
             "cutoff_percent": m.get("config", {}).get("cutoff_percent", 95),
+            "threshold_mode": m.get("config", {}).get("threshold_mode", "percent"),
+            "warning_value": m.get("config", {}).get("warning_value"),
+            "critical_value": m.get("config", {}).get("critical_value"),
+            "request_counter": m.get("counter"),
             "cutoff_action": "Oracle compute power-off"
             if m.get("provider_kind") == "oracle"
             else "Disable Home Assistant integrations",

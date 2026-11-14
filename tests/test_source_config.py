@@ -18,6 +18,26 @@ spec.loader.exec_module(source)
 
 
 class SourceTests(unittest.TestCase):
+    def test_daily_screen_time_expires_at_local_midnight_and_never_relabels_yesterday(
+        self,
+    ):
+        self.config.update(
+            period_mode="daily",
+            period_timezone="Asia/Jerusalem",
+            period_attribute="date",
+            timestamp_mode="state_reported",
+        )
+        self.states["sensor.usage"].last_reported = self.now
+        self.states["sensor.usage"].attributes["date"] = "2026-11-13"
+        sample = source.sensor_sample(self.config, self.states, self.now)
+        self.assertEqual(sample["period"], "2026-11-13")
+        self.assertEqual(sample["expires_at"], "2026-11-14T00:00:00+02:00")
+        self.assertEqual(sample["timestamp"], self.now.isoformat())
+        later = datetime(2026, 11, 13, 22, tzinfo=UTC)
+        self.assertIsNone(
+            source.sensor_sample(self.config, self.states, later)["period"]
+        )
+
     def setUp(self):
         self.now = datetime(2026, 11, 13, 8, tzinfo=UTC)
         self.config = {"usage_entity": "sensor.usage", "limit": 100}

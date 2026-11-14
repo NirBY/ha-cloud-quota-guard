@@ -14,14 +14,16 @@ from homeassistant.helpers.storage import Store
 from homeassistant.loader import async_get_integration
 from homeassistant.util import dt as dt_util
 
+from .ai_provider import AUTOMATIC, AIProvider
 from .diagnostics import connection_issues, metric_issues, retired_issues
-from .engine import crossings, evaluate
+from .engine import crossings, evaluate, evaluate_config, validate_thresholds
 from .google_provider import GoogleProvider
 from .localization import translate
 from .oracle_provider import OracleProvider, stop_instances, validate_targets
-from .provider_policies import policy_for
+from .provider_policies import coverage_for, policy_for
 from .provider_signals import collect_signals, subscribe
 from .relationships import collect_relationships
+from .request_counters import RequestCounters
 from .source_config import period_timezone, sensor_sample, usage_url
 
 DOMAIN = "quota_guard"
@@ -40,7 +42,10 @@ SCHEMA = vol.Schema(
         vol.Optional("period_entity"): cv.entity_id,
         vol.Optional("timestamp_entity"): cv.entity_id,
         vol.Optional("period_mode", default="attribute"): vol.In(
-            ["attribute", "monthly"]
+            ["attribute", "monthly", "daily"]
+        ),
+        vol.Optional("timestamp_mode", default="attribute"): vol.In(
+            ["attribute", "state_reported"]
         ),
         vol.Optional("period_timezone", default="UTC"): period_timezone,
         vol.Optional("limit"): vol.All(vol.Coerce(float), vol.Range(min=0.000001)),
@@ -57,6 +62,11 @@ SCHEMA = vol.Schema(
             vol.Coerce(float), vol.Range(min=0.01, max=100)
         ),
         vol.Optional("oracle_instance_ids", default=[]): [cv.string],
+        vol.Optional("threshold_mode", default="percent"): vol.In(
+            ["percent", "above", "below"]
+        ),
+        vol.Optional("warning_value"): vol.Coerce(float),
+        vol.Optional("critical_value"): vol.Coerce(float),
     }
 )
 
@@ -68,6 +78,22 @@ async def async_setup(hass, config):
     from .frontend import async_register_frontend
 
     await async_register_frontend(hass)
+
+    async def add_dashboard_view(call):
+        from .dashboard_setup import add_view
+
+        try:
+            await add_view(hass, call.data["dashboard_path"])
+        except ValueError as error:
+            raise HomeAssistantError(str(error)) from error
+
+    async_register_admin_service(
+        hass,
+        DOMAIN,
+        "add_dashboard_view",
+        add_dashboard_view,
+        schema=vol.Schema({vol.Required("dashboard_path"): cv.string}),
+    )
 
     async def dispatch(call):
         manager = hass.data.get(DOMAIN)
@@ -95,6 +121,7 @@ async def async_setup(hass, config):
                 vol.Optional("limit"): vol.Coerce(float),
                 vol.Required("period"): cv.string,
                 vol.Required("timestamp"): cv.string,
+                vol.Optional("expires_at"): cv.string,
             }
         ),
     )
@@ -106,6 +133,23 @@ async def async_setup_entry(hass, entry):
     manager = Guard(hass, entry)
     hass.data[DOMAIN] = manager
     await manager.load()
+    manager.request_counters = RequestCounters(hass, manager.data)
+    await manager.refresh_request_counters()
+    entry.async_on_unload(manager.request_counters.close)
+
+    async def flush_counters(_event):
+        manager.request_counters.close()
+        async with manager.lock:
+            await manager.store.async_save(manager.data)
+
+    entry.async_on_unload(
+        hass.bus.async_listen_once("homeassistant_stop", flush_counters)
+    )
+    entry.async_on_unload(
+        async_track_time_interval(
+            hass, manager.refresh_request_counters, timedelta(seconds=10)
+        )
+    )
     entry.async_on_unload(subscribe(hass, manager))
     await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
     entry.async_on_unload(
@@ -118,6 +162,7 @@ async def async_setup_entry(hass, entry):
 async def async_unload_entry(hass, entry):
     ok = await hass.config_entries.async_unload_platforms(entry, ["sensor"])
     if ok:
+        await hass.data[DOMAIN].store.async_save(hass.data[DOMAIN].data)
         hass.data.pop(DOMAIN, None)
     return ok
 
@@ -144,6 +189,8 @@ class Guard:
         self.lock = asyncio.Lock()
         self.poll_lock = asyncio.Lock()
         self.google = GoogleProvider()
+        self.ai = AIProvider()
+        self.request_counters = None
         self.relationships = {"available": False, "entries": {}}
 
     async def load(self):
@@ -184,6 +231,8 @@ class Guard:
         """Keep history without evaluating a disconnected or removed source."""
         metric = self.data["metrics"].pop(id)
         metric["config"]["enforce"] = False
+        metric["config"]["remote_enforce"] = False
+        self.data.get("remote_controls", {}).pop(id, None)
         metric["cutoff_authorized"] = False
         self.clear_data_alert(id, metric)
         for kind in ("threshold", "cutoff"):
@@ -254,19 +303,26 @@ class Guard:
             metric["acknowledged"] = True
             await self.store.async_save(self.data)
 
-    async def configure(self, call):
+    async def configure(self, call, *, initial_sample=None):
         cfg = dict(call.data)
-        if (
-            not 0
-            < cfg.get("warning_percent", 90)
-            < cfg.get("cutoff_percent", 95)
-            <= 100
-        ):
-            raise vol.Invalid("Warning must be below cutoff, from 0 to 100 percent")
+        try:
+            validate_thresholds(cfg)
+        except (ValueError, TypeError, KeyError) as error:
+            raise vol.Invalid(
+                "Set valid warning and critical values in the selected unit"
+            ) from error
         current = self.data["metrics"].get(cfg["id"], {})
         provider_id = current.get("config", {}).get("provider_id")
         provider = self.providers.get(provider_id, {})
         oracle = provider.get("type") == "oracle"
+        ai = provider.get("type") in AUTOMATIC
+        if provider.get("type") == "deepseek" and (
+            cfg.get("limit") is not None
+            or (cfg.get("enforce") and cfg.get("threshold_mode") != "below")
+        ):
+            raise vol.Invalid(
+                "Credit balances need remaining-balance thresholds, not a usage percentage"
+            )
         targets = cfg.get("oracle_instance_ids", [])
         if targets and not oracle:
             raise vol.Invalid("Oracle targets require an Oracle API source")
@@ -292,6 +348,14 @@ class Guard:
                 raise vol.Invalid("Invalid target integration")
         async with self.lock:
             old = self.data["metrics"].get(cfg["id"], {})
+            if initial_sample is not None:
+                if old or provider_id or cfg.get("usage_entity"):
+                    raise vol.Invalid("Initial reports require a new manual source")
+                initial_sample = {**initial_sample, "limit": cfg.get("limit")}
+                if evaluate(initial_sample, dt_util.utcnow(), cfg["max_age"])[
+                    "status"
+                ] not in ("ok", "warning", "cutoff", "usage_only"):
+                    raise vol.Invalid("Invalid initial reading")
             old_config = old.get("config", {})
             # A changed source must supply a new sample before it can enforce a cutoff.
             measurement_fields = (
@@ -305,11 +369,12 @@ class Guard:
                 "period_attribute",
                 "period_entity",
                 "timestamp_attribute",
+                "timestamp_mode",
                 "timestamp_entity",
                 "period_mode",
                 "period_timezone",
             )
-            if old_config.get("provider_id"):
+            if old_config.get("provider_id") or old_config.get("automatic_counter"):
                 # Provider measurements are immutable; only explicit target mapping
                 # and cutoff consent can be changed through the admin action.
                 normalized = SCHEMA(
@@ -322,10 +387,20 @@ class Guard:
                 if any(
                     cfg.get(k) != normalized.get(k)
                     for k in measurement_fields
-                    if not (oracle and k == "limit")
+                    if not (
+                        (oracle or ai or old_config.get("automatic_counter"))
+                        and k == "limit"
+                    )
                 ):
                     raise vol.Invalid("Provider measurements cannot be overwritten")
                 cfg = {**old_config, **cfg}
+                if (
+                    old_config.get("automatic_counter")
+                    and cfg["entry_ids"] != old_config["entry_ids"]
+                ):
+                    raise vol.Invalid(
+                        "A request counter belongs to its observed integration"
+                    )
             if not old_config.get("provider_id") and any(
                 old.get("config", {}).get(k) != cfg.get(k) for k in measurement_fields
             ):
@@ -343,6 +418,13 @@ class Guard:
                 ),
                 "status": "unknown",
             }
+            if initial_sample is not None:
+                self.data["metrics"][cfg["id"]]["sample"] = initial_sample
+            if ai and old.get("sample"):
+                self.data["metrics"][cfg["id"]]["sample"] = {
+                    **old["sample"],
+                    "limit": cfg.get("limit"),
+                }
             if oracle:
                 self.data["metrics"][cfg["id"]]["oracle_targets"] = verified_targets
                 if (
@@ -357,7 +439,14 @@ class Guard:
                     }
             if any(
                 old_config.get(k) != cfg.get(k)
-                for k in ("warning_percent", "cutoff_percent", "limit")
+                for k in (
+                    "warning_percent",
+                    "cutoff_percent",
+                    "limit",
+                    "threshold_mode",
+                    "warning_value",
+                    "critical_value",
+                )
             ):
                 self.data["metrics"][cfg["id"]].update(last_percent=None, notified=[])
             await self.store.async_save(self.data)
@@ -368,7 +457,9 @@ class Guard:
             metric = self.data["metrics"].get(call.data["id"])
             if metric is None:
                 raise vol.Invalid("Configure the metric first")
-            if metric["config"].get("provider_id"):
+            if metric["config"].get("provider_id") or metric["config"].get(
+                "automatic_counter"
+            ):
                 raise vol.Invalid(
                     "Provider-managed metrics cannot accept manual reports"
                 )
@@ -413,11 +504,7 @@ class Guard:
                     "disabled": bool(e.disabled_by),
                     "metrics": ids,
                     "policy": policy_for(e.domain, e.data, e.options),
-                    "coverage": "configured"
-                    if ids
-                    else "local"
-                    if io.startswith("local") or io == "calculated"
-                    else "needs_setup",
+                    "coverage": coverage_for(e.domain, io, ids),
                 }
             )
         self.inventory = rows
@@ -442,7 +529,7 @@ class Guard:
                         "state": "loaded",
                         "disabled": False,
                         "metrics": [],
-                        "coverage": "needs_setup",
+                        "coverage": coverage_for(domain, io, []),
                     }
                 )
 
@@ -456,13 +543,38 @@ class Guard:
                 await self.github_samples(dt_util.utcnow())
                 await self.google_samples()
                 await self.oracle_samples()
+                await self.ai_samples()
                 await self.evaluate_metrics()
         else:
             await self.evaluate_metrics()
 
+    async def refresh_request_counters(self, *_):
+        if self.request_counters:
+            self.request_counters.refresh(self.hass.config_entries.async_entries())
+
     async def evaluate_metrics(self):
         """Evaluate locally available samples without querying cloud providers."""
         async with self.lock:
+            await self.refresh_request_counters()
+            if self.request_counters:
+                current_entries = {
+                    e.entry_id for e in self.hass.config_entries.async_entries()
+                }
+                for id, metric in list(self.data["metrics"].items()):
+                    if (
+                        metric["config"].get("automatic_counter")
+                        and not set(metric["config"]["entry_ids"]) & current_entries
+                    ):
+                        self.retire_metric(id)
+                for row in self.request_counters.rows():
+                    metric = self.data["metrics"].setdefault(row["config"]["id"], row)
+                    config = metric["config"]
+                    if "sample" not in row:
+                        metric.pop("sample", None)
+                    metric.update(row)
+                    metric["config"] = config
+                    if "sample" in metric and config.get("limit"):
+                        metric["sample"]["limit"] = config["limit"]
             await self.inventory_refresh()
             await self.provider_signals_refresh()
             try:
@@ -475,13 +587,7 @@ class Guard:
                 if cfg.get("usage_entity"):
                     m["sample"] = sensor_sample(cfg, self.hass.states, now)
                 sample = m.get("sample", {})
-                decision = evaluate(
-                    sample,
-                    now,
-                    cfg["max_age"],
-                    cfg.get("warning_percent", 90),
-                    cfg.get("cutoff_percent", 95),
-                )
+                decision = evaluate_config(sample, now, cfg)
                 old_status = m.get("status")
                 m.update(decision)
                 if decision["status"] == "usage_only":
@@ -501,9 +607,16 @@ class Guard:
                         )
                         m["points"] = points[-3000:]
                     continue
-                if decision["percent"] is None:
+                if decision["status"] in ("unknown", "stale"):
                     for field in ("used", "limit", "remaining"):
                         m.pop(field, None)
+                    if (
+                        cfg.get("automatic_counter")
+                        and m.get("counter", {}).get("state") != "observing"
+                    ):
+                        m["status"] = "counter_unavailable"
+                        self.clear_data_alert(id, m)
+                        continue
                     reporting = m.get("reporting") or {}
                     checked_at = (
                         dt_util.parse_datetime(reporting["checked_at"])
@@ -554,6 +667,9 @@ class Guard:
                             )
                     continue
                 self.clear_data_alert(id, m)
+                if "limit" not in decision:
+                    m.pop("limit", None)
+                    m.pop("remaining", None)
                 period = sample["period"]
                 if m.get("period") != period:
                     m["period"] = period
@@ -572,28 +688,44 @@ class Guard:
                         }
                     )
                     m["points"] = points[-3000:]
-                for threshold in crossings(
-                    m.get("last_percent"),
-                    pct,
-                    cfg.get("warning_percent", 90),
-                    cfg.get("cutoff_percent", 95),
-                ):
+                absolute = cfg.get("threshold_mode", "percent") != "percent"
+                levels = (
+                    (
+                        ["warning", "critical"]
+                        if decision["status"] == "cutoff"
+                        else ["warning"]
+                        if decision["status"] == "warning"
+                        else []
+                    )
+                    if absolute
+                    else crossings(
+                        m.get("last_percent"),
+                        pct,
+                        cfg.get("warning_percent", 90),
+                        cfg.get("cutoff_percent", 95),
+                    )
+                )
+                for threshold in levels:
                     if threshold not in m.setdefault("notified", []):
                         m["notified"].append(threshold)
                         await self.event(
                             id,
                             "threshold",
                             threshold,
-                            self.text(
-                                "{name}: detected usage {percent:.2f}% — threshold {threshold}%",
-                                name=self.metric_name(cfg),
-                                percent=pct,
-                                threshold=threshold,
+                            (
+                                f"{self.metric_name(cfg)}: {threshold} — measured {decision['used']:g} {cfg.get('unit', '')}; threshold {cfg['critical_value'] if threshold == 'critical' else cfg['warning_value']:g} {cfg.get('unit', '')}."
+                                if absolute
+                                else self.text(
+                                    "{name}: detected usage {percent:.2f}% — threshold {threshold}%",
+                                    name=self.metric_name(cfg),
+                                    percent=pct,
+                                    threshold=threshold,
+                                )
                             ),
                         )
                 m["last_percent"] = pct
                 if (
-                    pct >= cfg.get("cutoff_percent", 95)
+                    decision["status"] == "cutoff"
                     and cfg.get("enforce")
                     and m.get("cutoff_authorized")
                     and not any(
@@ -645,6 +777,58 @@ class Guard:
                             cfg.get("cutoff_percent", 95),
                             self.text("Cutoff: ") + ", ".join(result.values()),
                         )
+                control = self.data.get("remote_controls", {}).get(id, {})
+                if (
+                    decision["status"] == "cutoff"
+                    and cfg.get("remote_enforce")
+                    and control.get("enabled")
+                    and control.get("targets")
+                    and control.get("attempts", 0) < 3
+                    and not any(
+                        issue["severity"] == "error"
+                        for issue in self.metric_diagnostics(m)
+                    )
+                ):
+                    checked_at = (
+                        dt_util.parse_datetime(control["checked_at"])
+                        if control.get("checked_at")
+                        else None
+                    )
+                    if checked_at is None or (now - checked_at).total_seconds() >= 900:
+                        from .provider_controls import DONE, stop
+
+                        previous = control.get("result", {})
+                        if not all(
+                            previous.get(target) in DONE
+                            for target in control["targets"]
+                        ):
+                            control["attempts"] = control.get("attempts", 0) + 1
+                            control["checked_at"] = now.isoformat()
+                            # Persist intent before mutation; retries are bounded across restarts.
+                            await self.store.async_save(self.data)
+                            try:
+                                result = await self.hass.async_add_executor_job(
+                                    stop,
+                                    self.providers[cfg["provider_id"]],
+                                    control["targets"],
+                                    previous,
+                                    control.get("service"),
+                                )
+                            except Exception:
+                                result = {
+                                    target: previous.get(
+                                        target, "failed_or_unconfirmed"
+                                    )
+                                    for target in control["targets"]
+                                }
+                            control["result"] = result
+                            m["remote_cutoff_result"] = result
+                            await self.event(
+                                id,
+                                "cutoff",
+                                None,
+                                "Provider cutoff: " + ", ".join(result.values()),
+                            )
             await self.store.async_save(self.data)
             for listener in self.listeners:
                 listener()
@@ -667,8 +851,19 @@ class Guard:
                 metric.pop("sample", None)
             metric.update(row)
             metric["config"] = config
-            if row.get("provider_kind") == "oracle" and "sample" in row:
+            if row.get("provider_kind") in {"oracle", *AUTOMATIC} and "sample" in row:
                 metric["sample"]["limit"] = config.get("limit")
+
+    async def ai_samples(self):
+        for id, provider in self.providers.items():
+            if provider.get("type") not in AUTOMATIC:
+                continue
+            rows = await self.hass.async_add_executor_job(
+                self.ai.fetch, {"id": id, **provider}
+            )
+            if id in self.providers:
+                for row in rows:
+                    await self.apply_provider_row(row)
 
     async def github_samples(self, now):
         """Read core usage only with a token supplied to Quota Guard itself."""
@@ -851,6 +1046,11 @@ class Guard:
         return self.text(name) if config.get("builtin_name") else name
 
     async def event(self, id, kind, threshold, message):
+        config = self.data["metrics"].get(id, {}).get("config", {})
+        if kind == "threshold" and not (
+            config.get("enforce") or config.get("remote_enforce")
+        ):
+            message += " Monitoring only — automatic cutoff is off."
         sample = self.data["metrics"].get(id, {}).get("sample", {})
         item = {
             "id": id,
@@ -875,7 +1075,11 @@ class Guard:
         # Persist the threshold latch before sending notifications or changing targets.
         await self.store.async_save(self.data)
         config = self.data["metrics"].get(id, {}).get("config", {})
-        if kind != "provider_quota_exhausted" and self.provider_alerts_paused(config):
+        if kind not in (
+            "provider_quota_exhausted",
+            "threshold",
+            "cutoff",
+        ) and self.provider_alerts_paused(config):
             return
         self.hass.bus.async_fire("quota_guard_event", item)
         persistent_notification.async_create(
@@ -884,3 +1088,31 @@ class Guard:
             title=self.text("Cloud service quotas"),
             notification_id=f"quota_guard_{id}_{kind}",
         )
+        channels = (
+            self.entry.data.get("notification_channels", []) if self.entry else []
+        )
+        if channels and kind in ("threshold", "cutoff", "provider_quota_exhausted"):
+            from .notifications import deliver
+
+            level = (
+                "cutoff"
+                if kind == "cutoff"
+                else "critical"
+                if kind == "provider_quota_exhausted"
+                or threshold == "critical"
+                or isinstance(threshold, (int, float))
+                and threshold >= config.get("cutoff_percent", 95)
+                else "warning"
+            )
+            failures = await deliver(
+                self.hass, channels, level, "Cloud Quota Guard — " + level, message
+            )
+            self.data["notification_failures"] = failures
+            await self.store.async_save(self.data)
+            if failures:
+                persistent_notification.async_create(
+                    self.hass,
+                    "A configured Quota Guard notification channel failed. The alert remains here. Check Notification channels in Quota Guard settings.",
+                    title="Quota Guard notification delivery",
+                    notification_id="quota_guard_notification_delivery",
+                )

@@ -96,6 +96,7 @@ configure:
           options:
           - attribute
           - monthly
+          - daily
     period_timezone:
       required: false
       selector:
@@ -122,6 +123,33 @@ configure:
       required: false
       selector:
         object: {}
+    timestamp_mode:
+      required: false
+      selector:
+        select:
+          options:
+          - attribute
+          - state_reported
+    threshold_mode:
+      required: false
+      selector:
+        select:
+          options:
+          - percent
+          - above
+          - below
+    warning_value:
+      required: false
+      selector:
+        number:
+          min: 0
+          mode: box
+    critical_value:
+      required: false
+      selector:
+        number:
+          min: 0
+          mode: box
 report:
   fields:
     id:
@@ -150,3 +178,18 @@ report:
       required: true
       selector:
         text: {}
+    expires_at:
+      required: false
+      selector:
+        text: {}
+add_dashboard_view:
+  name: Add English dashboard view
+  description: Append one English quota view to an existing editable dashboard. Existing
+    views are preserved.
+  fields:
+    dashboard_path:
+      name: Dashboard URL path
+      required: true
+      example: dashboard-cloud-quotas
+      selector:
+        text: null

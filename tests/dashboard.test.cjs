@@ -7,6 +7,24 @@ let Card;
 const context={HTMLElement:class {attachShadow(){return {}; }},customElements:{get(){},define(name,value){Card=value;}},window:{},setInterval,clearInterval,Date,URL};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../custom_components/quota_guard/frontend/quota-guard-card.js'),'utf8'),context);
 
+test('absolute alerts without an allowance stay current and show critical status',()=>{
+ const card=new Card(),m={type:'metric',key:'count',config:{id:'count',name:'Demo HTTP requests',unit:'requests',threshold_mode:'above',warning_value:50,critical_value:75,enforce:false},sample:{used:80,timestamp:new Date().toISOString(),period:'today'},status:'cutoff',percent:null,counter:{partial_period:true,first_observed:new Date().toISOString()}};
+ assert.equal(card.usageFresh(m),true);assert.equal(card.state(m)[0],'danger');assert.equal(card.needsAttention(m),true);
+ assert.match(card.tile(m),/Critical value reached/);assert.match(card.tile(m),/partial day/);
+ assert.match(card.detail(m),/50 requests/);assert.match(card.detail(m),/75 requests/);
+ assert.doesNotMatch(card.tile(m),/% used|stale/);assert.match(card.detail(m),/00:00 UTC/);
+});
+
+test('discovery alone does not create false quota warnings for unsupported integrations',()=>{
+ const card=new Card();card.data={metrics:{},inventory:['marketplace','life360','mashov'].map(domain=>({domain,coverage:domain==='marketplace'?'catalog':'unverified_service',state:'loaded',diagnostics:[]}))};
+ assert.equal(card.rows().length,0);
+});
+
+test('paused counters keep history without claiming zero or a verified quota',()=>{
+ const card=new Card(),m={type:'metric',key:'paused',config:{id:'paused',name:'Demo'},status:'counter_unavailable',counter:{state:'off'}};
+ assert.match(card.tile(m),/Request counter paused/);assert.doesNotMatch(card.tile(m),/% used|Quota limit not verified|>0</);
+});
+
 test('custom percentages drive status, chart markers, labels and form validation',()=>{
  const card=new Card(),now=new Date().toISOString();
  const m={type:'metric',key:'oracle',provider_kind:'oracle',config:{id:'qg_oracle_test',name:'Oracle Free Tier',kind:'free_allowance',unit:'OCPU hours',max_age:1800,warning_percent:60,cutoff_percent:75,enforce:true},status:'cutoff',cutoff_authorized:true,percent:80,sample:{used:80,limit:100,timestamp:now,period:'month'},points:[{at:now,source_at:now,percent:80,used:80,period:'month'}]};

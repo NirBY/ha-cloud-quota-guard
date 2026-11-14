@@ -376,5 +376,12 @@
   "Oracle usage reports are delayed. Power-off does not stop storage or other resource charges.": "דיווחי השימוש של Oracle מושהים. כיבוי המחשוב אינו מפסיק חיובי אחסון ומשאבים אחרים.",
   "Power-off threshold": "סף הכיבוי",
   "No automatic restart. Only explicitly selected compute instances are affected.": "אין הפעלה מחדש אוטומטית. הפעולה משפיעה רק על מופעי המחשוב שנבחרו במפורש.",
-  "Configure allowance, thresholds and cutoff": "הגדרת מכסה, אחוזים ופעולת כיבוי"
+  "Configure allowance, thresholds and cutoff": "הגדרת מכסה, אחוזים ופעולת כיבוי",
+  "Available credits": "יתרת קרדיטים",
+  "Credit balance only — no usage percentage or cutoff.": "יתרת קרדיטים בלבד — ללא אחוז שימוש או כיבוי.",
+  "AI services and Tuya setup": "הגדרת שירותי AI ו־Tuya",
+  "Open Quota Guard settings, choose Tuya usage, then connect a sensor or enter a console reading. The Tuya integration itself was not disabled.": "פתחו את הגדרות Quota Guard, בחרו שימוש Tuya וחברו חיישן או הזינו קריאה ממסוף הספק. אינטגרציית Tuya עצמה לא הושבתה.",
+  "AI, Tuya and IMOU setup": "הגדרת AI, Tuya ו־IMOU",
+  "Set up IMOU usage": "הגדרת שימוש IMOU",
+  "Manual reading": "קריאה ידנית"
 }

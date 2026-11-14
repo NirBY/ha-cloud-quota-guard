@@ -6,6 +6,33 @@ TELEGRAM_API = "https://core.telegram.org/bots/api#sending-files"
 XIAOMI_DOC = "https://github.com/al-one/hass-xiaomi-miot#config"
 
 
+def coverage_for(domain, io_class, metric_ids):
+    if metric_ids:
+        return "configured"
+    # Catalog checks may consume GitHub requests, but are not independent quotas.
+    if domain in ("marketplace", "hacs"):
+        return "catalog"
+    if io_class.startswith("local") or io_class == "calculated":
+        return "local"
+    # Cloud connectivity alone is not evidence of an account quota. Preserve the
+    # inventory for explicit mappings, but only surface supported quota domains.
+    if domain in {
+        "github",
+        "google",
+        "google_cloud",
+        "google_assistant_sdk",
+        "google_generative_ai_conversation",
+        "openai_conversation",
+        "anthropic",
+        "imou_life",
+        "tuya",
+        "telegram_bot",
+        "xiaomi_miot",
+    }:
+        return "needs_setup"
+    return "unverified_service"
+
+
 def policy_for(domain, data=None, options=None):
     """Return public policy plus safe connection settings; never copy credentials."""
     data, options = data or {}, options or {}

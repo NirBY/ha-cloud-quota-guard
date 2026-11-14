@@ -19,6 +19,11 @@ def issue(code, message, action, *, severity="error", field=None, **details):
 def metric_issues(metric, states, entries, now):
     """Missing coverage is not a configuration error; inspect configured sources only."""
     cfg = metric["config"]
+    if (
+        cfg.get("automatic_counter")
+        and metric.get("counter", {}).get("state") != "observing"
+    ):
+        return []
     sample = metric.get("sample") or {}
     result = []
     missing = set()
@@ -245,7 +250,11 @@ def metric_issues(metric, states, entries, now):
                         field="limit_entity" if cfg.get("limit_entity") else "limit",
                     )
                 )
-        elif cfg.get("enforce") and not provider_error:
+        elif (
+            cfg.get("enforce")
+            and cfg.get("threshold_mode", "percent") == "percent"
+            and not provider_error
+        ):
             result.append(
                 issue(
                     "limit_required",
@@ -308,7 +317,7 @@ def retired_issues(metric):
             issue(
                 "observer_removed",
                 "The old Tuya request counter was removed in the update.",
-                "Connect an existing usage sensor or report source. The Tuya integration itself was not disabled.",
+                "Open Quota Guard settings, choose Tuya usage, then connect a sensor or enter a console reading. The Tuya integration itself was not disabled.",
                 severity="warning",
             )
         ]

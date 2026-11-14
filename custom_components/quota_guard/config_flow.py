@@ -6,7 +6,11 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
+from .alert_flow import AlertFlow
+from .control_flow import ControlFlow
+from .family_flow import FamilyFlow
 from .oracle_flow import OracleFlow, threshold_fields
+from .usage_flow import UsageFlow
 
 SETUP_HELP = (
     "https://github.com/NirBY/ha-cloud-quota-guard/blob/main/README.md#setup-help"
@@ -29,7 +33,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain="quota_guard"):
         return self.async_show_form(step_id="user", data_schema=vol.Schema({}))
 
 
-class OptionsFlow(OracleFlow, config_entries.OptionsFlow):
+class OptionsFlow(
+    ControlFlow,
+    FamilyFlow,
+    AlertFlow,
+    UsageFlow,
+    OracleFlow,
+    config_entries.OptionsFlow,
+):
     """Configure sensor sources from the integration's Configure button."""
 
     _source_id = None
@@ -42,13 +53,85 @@ class OptionsFlow(OracleFlow, config_entries.OptionsFlow):
             menu_options=[
                 "add",
                 "edit",
+                "ai",
+                "family",
+                "tuya",
+                "imou",
                 "github",
                 "google",
                 "oracle",
                 "oracle_manage",
                 "remove_provider",
                 "mapping",
+                "provider_cutoff",
+                "alerts",
+                "notifications",
+                "dashboard",
+                "request_counters",
             ],
+        )
+
+    async def async_step_request_counters(self, user_input=None):
+        manager = self.hass.data["quota_guard"]
+        if user_input is not None:
+            manager.data["automatic_request_counters"] = user_input["enabled"]
+            await manager.tick(refresh_providers=False)
+            return self.async_create_entry(title="", data={})
+        statuses = manager.request_counters.states if manager.request_counters else {}
+        labels = {
+            "observing": "Counting HTTP requests",
+            "waiting_for_client": "Waiting for a supported HTTP client",
+            "integration_not_loaded": "Integration is not loaded",
+            "shared_client_unsupported": "Shared HTTP client cannot be attributed safely",
+            "off": "Off",
+        }
+        return self.async_show_form(
+            step_id="request_counters",
+            description_placeholders={
+                "coverage": "\n".join(
+                    f"- {s['name']}: {labels[s['state']]}" for s in statuses.values()
+                )
+                or "No supported HTTP clients are loaded yet."
+            },
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        "enabled",
+                        default=manager.data.get("automatic_request_counters", True),
+                    ): bool
+                }
+            ),
+        )
+
+    async def async_step_dashboard(self, user_input=None):
+        from .dashboard_setup import add_view, dashboards
+
+        errors = {}
+        if user_input is not None:
+            try:
+                await add_view(self.hass, user_input["dashboard_path"])
+            except Exception:
+                errors["base"] = "dashboard_failed"
+            else:
+                return self.async_create_entry(title="", data={})
+        choices = [
+            {
+                "value": path or "lovelace",
+                "label": (dashboard.config or {}).get("title", path or "Overview"),
+            }
+            for path, dashboard in dashboards(self.hass).items()
+            if dashboard.mode == "storage"
+        ]
+        return self.async_show_form(
+            step_id="dashboard",
+            errors=errors,
+            data_schema=vol.Schema(
+                {
+                    vol.Required("dashboard_path"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=choices)
+                    )
+                }
+            ),
         )
 
     async def async_step_github(self, user_input=None):
@@ -139,9 +222,12 @@ class OptionsFlow(OracleFlow, config_entries.OptionsFlow):
             ),
         )
 
-    def save_provider(self, provider):
+    def save_provider(self, provider, provider_id=None):
         entry = self.config_entry
-        providers = {**entry.data.get("providers", {}), uuid4().hex[:12]: provider}
+        providers = {
+            **entry.data.get("providers", {}),
+            provider_id or uuid4().hex[:12]: provider,
+        }
         self.hass.config_entries.async_update_entry(
             entry, data={**entry.data, "providers": providers}
         )
@@ -199,11 +285,15 @@ class OptionsFlow(OracleFlow, config_entries.OptionsFlow):
 
     async def async_step_cutoff(self, user_input=None):
         from . import SCHEMA
+        from .ai_provider import AUTOMATIC
 
         manager = self.hass.data["quota_guard"]
         current = manager.data["metrics"].get(self._source_id, {}).get("config")
         if current is None:
             return self.async_abort(reason="no_metrics")
+        provider_type = manager.providers.get(current.get("provider_id"), {}).get(
+            "type"
+        )
         if (
             manager.providers.get(current.get("provider_id"), {}).get("type")
             == "oracle"
@@ -212,6 +302,8 @@ class OptionsFlow(OracleFlow, config_entries.OptionsFlow):
         errors = {}
         if user_input is not None:
             data = {str(k): current[str(k)] for k in SCHEMA.schema if str(k) in current}
+            if provider_type in AUTOMATIC and provider_type != "deepseek":
+                data.pop("limit", None)
             data.update(user_input)
             data["entry_ids"] = user_input.get("entry_ids", [])
             try:
@@ -230,7 +322,23 @@ class OptionsFlow(OracleFlow, config_entries.OptionsFlow):
             errors=errors,
             data_schema=vol.Schema(
                 {
-                    **threshold_fields(current),
+                    **(
+                        {
+                            vol.Optional(
+                                "limit",
+                                description={"suggested_value": current.get("limit")},
+                            ): selector.NumberSelector(
+                                selector.NumberSelectorConfig(min=0.000001, mode="box")
+                            )
+                        }
+                        if provider_type in AUTOMATIC and provider_type != "deepseek"
+                        else {}
+                    ),
+                    **(
+                        threshold_fields(current)
+                        if current.get("threshold_mode", "percent") == "percent"
+                        else {}
+                    ),
                     vol.Required("enforce", default=False): bool,
                     vol.Optional(
                         "entry_ids",
@@ -279,6 +387,14 @@ class OptionsFlow(OracleFlow, config_entries.OptionsFlow):
         current = manager.data["metrics"].get(self._source_id, {}).get("config", {})
         if user_input is not None:
             data = {key: value for key, value in user_input.items() if value != ""}
+            for key in (
+                "threshold_mode",
+                "warning_value",
+                "critical_value",
+                "timestamp_mode",
+            ):
+                if key in current:
+                    data.setdefault(key, current[key])
             data.setdefault("entry_ids", [])
             data.setdefault("enforce", False)
             data.setdefault(
@@ -312,6 +428,7 @@ class OptionsFlow(OracleFlow, config_entries.OptionsFlow):
             "period_timezone": "UTC",
             "enforce": False,
             "entry_ids": [],
+            **getattr(self, "_source_defaults", {}),
             **current,
             **(user_input or {}),
         }
@@ -362,7 +479,8 @@ class OptionsFlow(OracleFlow, config_entries.OptionsFlow):
             "period_mode",
             selector.SelectSelector(
                 selector.SelectSelectorConfig(
-                    options=["attribute", "monthly"], translation_key="period_mode"
+                    options=["attribute", "monthly", "daily"],
+                    translation_key="period_mode",
                 )
             ),
             True,
@@ -391,5 +509,7 @@ class OptionsFlow(OracleFlow, config_entries.OptionsFlow):
             step_id="source",
             data_schema=vol.Schema(fields),
             errors=errors,
-            description_placeholders={"setup_help_url": SETUP_HELP + "-sensor"},
+            description_placeholders={
+                "setup_help_url": getattr(self, "_source_help", SETUP_HELP + "-sensor")
+            },
         )

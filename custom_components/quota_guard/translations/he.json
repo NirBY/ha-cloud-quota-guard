@@ -103,6 +103,22 @@
         "oracle_instance_ids": {
           "name": "Oracle compute instance OCIDs",
           "description": "Only for an Oracle API source. Explicit instance targets checked against the connection's region; never inferred from a sensor or HA integration."
+        },
+        "timestamp_mode": {
+          "name": "Measurement timestamp",
+          "description": "Use the source attribute or explicitly opt in to the last Home Assistant state report."
+        },
+        "threshold_mode": {
+          "name": "Alert comparison",
+          "description": "Percentage of allowance, usage reaches an amount, or remaining balance falls to an amount."
+        },
+        "warning_value": {
+          "name": "Warning amount",
+          "description": "In the source unit; no allowance is required."
+        },
+        "critical_value": {
+          "name": "Critical amount",
+          "description": "Higher than warning for usage, lower for remaining balance."
         }
       }
     },
@@ -129,6 +145,10 @@
         "timestamp": {
           "name": "חותמת זמן של המקור",
           "description": "חותמת זמן ISO 8601 של מדידת הספק, כולל אזור זמן."
+        },
+        "expires_at": {
+          "name": "Quota reset time",
+          "description": "Optional timezone-aware ISO timestamp after which this reading must not be evaluated."
         }
       }
     },
@@ -139,6 +159,16 @@
         "id": {
           "name": "מזהה המדד שהופסק",
           "description": "אפשר לסמן רק מקור שהופסק."
+        }
+      }
+    },
+    "add_dashboard_view": {
+      "name": "Add English dashboard view",
+      "description": "Append a Cloud Quotas view to an existing editable dashboard. Preserve all existing views; repeated calls do not add duplicates.",
+      "fields": {
+        "dashboard_path": {
+          "name": "Dashboard URL path",
+          "description": "Path without hostname or slashes, for example dashboard-cloud-quotas or lovelace."
         }
       }
     }
@@ -155,7 +185,16 @@
           "remove_provider": "הסרת חיבור לספק",
           "mapping": "Configure thresholds and cutoff",
           "oracle": "Connect Oracle Cloud API",
-          "oracle_manage": "Choose Oracle usage meters"
+          "oracle_manage": "Choose Oracle usage meters",
+          "ai": "AI services",
+          "tuya": "Tuya usage",
+          "imou": "IMOU usage",
+          "dashboard": "Add English dashboard view",
+          "alerts": "Warning and critical alerts",
+          "notifications": "Alert delivery (email, Telegram, WhatsApp)",
+          "request_counters": "Automatic HTTP request counters",
+          "family": "Family screen time (Microsoft / Google)",
+          "provider_cutoff": "Provider-side cutoff (keys, APIs, spend limits)"
         }
       },
       "edit": {
@@ -201,7 +240,7 @@
           "period_attribute": "מאפיין בחיישן השימוש המכיל את מזהה תקופת הספק.",
           "timestamp_attribute": "מאפיין בחיישן השימוש המכיל חותמת זמן של המקור כולל אזור זמן.",
           "max_age": "מספר השניות עד שמדידה נחשבת ישנה (30–86400).",
-          "enforce": "השבתת האינטגרציות שמופו במפורש ב־95%. אין הפעלה מחדש אוטומטית.",
+          "enforce": "Disable explicitly mapped integrations at your configured cutoff percentage; never automatically re-enable them.",
           "usage_url": "קישור HTTP(S) או נתיב ללוח בקרה. משמש לעיון בלבד, ולא לאיסוף אוטומטי של נתונים.",
           "usage_attribute": "מאפיין מספרי בחיישן השימוש. השאירו ריק כדי לקרוא את מצב החיישן.",
           "period_entity": "חיישן שמצבו מכיל את מזהה תקופת הספק. מחליף את מאפיין התקופה.",
@@ -256,7 +295,8 @@
           "enforce": "Enable automatic integration cutoff",
           "entry_ids": "אינטגרציות יעד",
           "warning_percent": "Warning percentage",
-          "cutoff_percent": "Cutoff percentage"
+          "cutoff_percent": "Cutoff percentage",
+          "limit": "Budget or allowance (optional)"
         }
       },
       "oracle": {
@@ -306,6 +346,202 @@
           "oracle_instance_ids": "Paste each full instance OCID and press Enter. Every selected instance is checked against Oracle before saving.",
           "cutoff_percent": "Must be greater than the warning percentage and no higher than 100. You can choose a lower threshold to allow for delayed reports."
         }
+      },
+      "ai": {
+        "title": "AI services",
+        "description": "Choose a provider and account type. API/team connections use provider reporting APIs; personal subscriptions use a manual reading or an existing sensor. [Setup guide]({setup_help_url}).",
+        "data": {
+          "provider": "AI provider",
+          "account_type": "Connection type"
+        }
+      },
+      "tuya": {
+        "title": "Tuya usage",
+        "description": "Connect a usage sensor or enter a reading from Tuya Developer Console > Cloud > Data Statistics. Automatic Tuya quota polling is not supported here. Developer-project usage may differ from Home Assistant's Tuya Sharing integration. [Setup guide]({setup_help_url}).",
+        "menu_options": {
+          "usage_sensor": "Connect an existing usage sensor",
+          "usage_manual": "Enter a console reading",
+          "usage_update": "Update a saved reading"
+        }
+      },
+      "ai_unavailable": {
+        "title": "{provider} usage",
+        "description": "Automatic quota retrieval is not supported for this provider. Continue to enter a manual reading, or close and choose an existing sensor. No credentials are needed. [Setup guide]({setup_help_url})."
+      },
+      "ai_connect": {
+        "title": "Connect {provider}",
+        "description": "{instructions}\n\nThis connection starts in monitoring-only mode. [Where to find credentials and what to enter]({setup_help_url}).",
+        "data": {
+          "name": "Connection name",
+          "api_key": "API reporting key",
+          "service_account_info": "Google service-account JSON key",
+          "team_id": "xAI team ID",
+          "currency": "Balance currency",
+          "limit": "Optional budget or allowance",
+          "warning_percent": "Warning percentage",
+          "cutoff_percent": "Cutoff percentage"
+        },
+        "data_description": {
+          "api_key": "Paste the key itself, without a Bearer prefix. Never use a password or browser session cookie.",
+          "limit": "Use the unit and reporting period described above. Leave blank to show the reported amount without a percentage. This does not change the provider's spending limit."
+        }
+      },
+      "usage_manual": {
+        "title": "{provider} — manual usage",
+        "description": "Create a manually updated source using your [provider usage page]({usage_url}). Enter only a reading actually shown for your account. Percent readings use an allowance of 100. Automatic cutoff starts off.",
+        "data": {
+          "name": "Source name",
+          "unit": "Reading unit",
+          "limit": "Allowance (optional)",
+          "warning_percent": "Warning percentage",
+          "cutoff_percent": "Cutoff percentage"
+        },
+        "data_description": {
+          "limit": "Required to calculate a percentage from requests, tokens, messages, or USD. For % readings, 100 is used automatically."
+        }
+      },
+      "usage_update": {
+        "title": "Choose a manual source",
+        "data": {
+          "source_id": "Saved source"
+        }
+      },
+      "usage_reading": {
+        "title": "Update {source_name}",
+        "description": "Enter the value in {unit} from the [usage page]({usage_url}). This is a manual snapshot, not continuous monitoring. It expires after 24 hours or the supplied reset time, whichever comes first. Remaining values require an allowance. An existing enabled cutoff can act on a new reading.",
+        "data": {
+          "reading_type": "The provider shows",
+          "value": "Reading",
+          "period": "Reporting period",
+          "timestamp": "Reading timestamp",
+          "expires_at": "Quota reset time (optional)"
+        },
+        "data_description": {
+          "period": "Copy the provider's period or window, for example 2026-11 or a named weekly window.",
+          "timestamp": "The source's timestamp with timezone, for example 2026-11-14T18:30:00+02:00. If the page shows a live value, use the time you read it; do not relabel a delayed report as current.",
+          "expires_at": "If shown by the provider, enter the reset timestamp with timezone. The old reading will stop being evaluated at that time."
+        }
+      },
+      "imou": {
+        "title": "Set up IMOU usage",
+        "description": "OP1013 means IMOU has rejected calls because its total call allowance is exhausted. Quota Guard detects that error automatically; it does not invent a usage count or reset time. Connect an existing quota sensor or enter the actual reading from IMOU My Resources. [Setup guide]({setup_help_url}).",
+        "menu_options": {
+          "usage_sensor": "Connect an existing usage sensor",
+          "usage_manual": "Enter a console reading",
+          "usage_update": "Update a saved reading"
+        }
+      },
+      "dashboard": {
+        "title": "Add English dashboard view",
+        "description": "Choose an existing editable dashboard. A full-width Cloud Quotas view will be added once, preserving your other views. Automatically generated and YAML dashboards need a separate editable dashboard first.",
+        "data": {
+          "dashboard_path": "Dashboard"
+        }
+      },
+      "request_counters": {
+        "title": "Automatic HTTP request counters",
+        "description": "Supported integrations are discovered on first install and checked again every 10 seconds. New counters appear within one minute. This counts observed HTTP requests from this Home Assistant instance, including redirects and retries. Provider quota and billable usage are not inferred. Startup and reload requests may be missed; counts are labelled as partial days and reset at 00:00 UTC.\n\n{coverage}\n\nFor other integrations, connect an existing request sensor or ask its author to expose an owned HTTP session. Automatic cutoff stays off until you explicitly enable it.",
+        "data": {
+          "enabled": "Automatically discover supported request counters"
+        }
+      },
+      "alerts": {
+        "title": "Warning and critical alerts",
+        "description": "Choose a source. Alerts work without automatic cutoff and without a verified allowance.",
+        "data": {
+          "source_id": "Usage source"
+        }
+      },
+      "alert_mode": {
+        "title": "How should {source_name} trigger alerts?",
+        "description": "Choose the comparison in {unit}. A percentage requires a known allowance. Amount thresholds do not.",
+        "data": {
+          "threshold_mode": "Alert when"
+        }
+      },
+      "alert_values": {
+        "title": "Warning and critical values",
+        "description": "Source: {source_name}\n\n{rule}\n\nValues are in {unit}. Home Assistant notifications remain active even when cutoff is off.",
+        "data": {
+          "warning_value": "Warning value",
+          "critical_value": "Critical value",
+          "warning_percent": "Warning percentage",
+          "cutoff_percent": "Critical percentage"
+        }
+      },
+      "notifications": {
+        "title": "Alert delivery",
+        "description": "Home Assistant persistent notifications are always enabled. Add optional delivery through an existing email, Telegram, GreenAPI / WhatsApp or other notify service. External delivery is off by default.",
+        "menu_options": {
+          "notification_add": "Add a notification destination",
+          "notification_edit": "Edit a notification destination",
+          "notification_remove": "Remove a notification destination"
+        }
+      },
+      "notification_add": {
+        "title": "Notification destination",
+        "description": "Choose an existing Home Assistant notify service or notify entity. Configure email / SMTP, Telegram or GreenAPI in Home Assistant first if it is missing. Enter recipients only if your notify service requires them. Saving does not send a test message.",
+        "data": {
+          "name": "Display name",
+          "destination": "Notify service or entity",
+          "targets": "Recipients (comma-separated; service only)",
+          "levels": "Send these alert levels",
+          "enabled": "Enable external delivery"
+        }
+      },
+      "notification_edit": {
+        "title": "Edit notification delivery",
+        "data": {
+          "channel_id": "Destination"
+        }
+      },
+      "notification_remove": {
+        "title": "Remove notification delivery",
+        "data": {
+          "channel_id": "Destination"
+        }
+      },
+      "family": {
+        "title": "Family screen-time monitoring",
+        "description": "Connect usage sensors from your existing family integrations. This measures screen time, not cloud API requests.",
+        "data": {
+          "integration": "Family integration"
+        }
+      },
+      "family_sensor": {
+        "title": "Connect {provider} screen time",
+        "description": "Choose a daily screen-time sensor in minutes. Warning and critical values are your own rules. The optional allowance is a local daily target; it does not change the provider’s parental controls. Data expires at local midnight. When no provider poll timestamp exists, freshness means the last Home Assistant state report. This form does not disable or lock devices.",
+        "data": {
+          "name": "Display name",
+          "usage_entity": "Daily screen-time sensor",
+          "warning_value": "Warn at (minutes)",
+          "critical_value": "Critical at (minutes)",
+          "limit": "Optional daily allowance (minutes)"
+        }
+      },
+      "provider_cutoff": {
+        "title": "Provider-side automatic cutoff",
+        "description": "Choose a measured source. These controls can affect applications outside Home Assistant. Local integration cutoff is configured separately. Everything is off by default.",
+        "data": {
+          "source_id": "Measured source"
+        }
+      },
+      "provider_targets": {
+        "title": "{action}",
+        "description": "{instructions}\n\nConfigure warning and critical thresholds first. Enabling requires exact targets and explicit scope confirmation. Delayed reporting can overshoot a budget; prefer a native provider spending cap as the first safeguard. Saving this step only reads target metadata.",
+        "data": {
+          "targets": "Exact target IDs (one per line)",
+          "control_api_key": "OpenRouter Management key (optional if already saved)",
+          "enabled": "Enable provider cutoff at the critical threshold",
+          "confirm_scope": "I confirm these targets consume this metric and understand the action affects their applications"
+        }
+      },
+      "provider_confirm": {
+        "title": "Review automatic provider cutoff",
+        "description": "Source: {source}\n\nAction: {action}\n\nVerified targets:\n{targets}\n\nIf the critical threshold is already exceeded, the next evaluation can act immediately. Disabling persists across restarts and period resets. Revoked keys cannot be restored. Quota Guard never re-enables resources or removes spending limits.",
+        "data": {
+          "confirm": "Enable this exact action for these targets"
+        }
       }
     },
     "error": {
@@ -319,14 +555,27 @@
       "oracle_access_failed": "Oracle usage could not be read. Check the home region, API signing credentials and read usage-report permission.",
       "oracle_meters_required": "Select at least one reported usage meter.",
       "oracle_confirmation_required": "Confirm that the selected compute instances consume this quota before enabling power-off.",
-      "oracle_cutoff_invalid": "Use a positive allowance, warning below cutoff (0–100%), and valid instance OCIDs in this connection's region. Check read-instance access. Power-off also needs INSTANCE_POWER_ACTION permission."
+      "oracle_cutoff_invalid": "Use a positive allowance, warning below cutoff (0–100%), and valid instance OCIDs in this connection's region. Check read-instance access. Power-off also needs INSTANCE_POWER_ACTION permission.",
+      "ai_credentials_invalid": "Check the key, connection fields, allowance and percentages. Warning must be below cutoff.",
+      "ai_access_failed": "Could not read this account's report. Check the key type, read permissions, account plan and any required team ID or currency. No connection was saved.",
+      "invalid_reading": "Check the value, reporting period and timezone-aware timestamps. Readings must be fresh, unexpired and no older than the previous reading. Remaining values require a valid allowance.",
+      "dashboard_failed": "Could not add the view. Choose an editable storage dashboard with saved views and check that cloud-quotas is not used by a different view.",
+      "invalid_alert_values": "Enter non-negative warning and critical values in the correct order.",
+      "notification_invalid": "Check the destination, recipients and alert levels. Up to five destinations are supported.",
+      "provider_control_invalid": "Check permissions, exact target IDs and scope confirmation. Configure amount thresholds or an allowance first. No provider action was taken."
     },
     "abort": {
       "not_loaded": "יש להפעיל את Cloud Quota Guard לפני ההגדרה.",
       "no_sources": "אין מקורות חיישנים לעריכה. יש להוסיף מקור תחילה.",
       "no_providers": "אין חיבורים לספקים להסרה.",
       "no_metrics": "אין מדדים פעילים. יש להוסיף מקור או להמתין לדגימה הבאה.",
-      "oracle_no_usage": "Oracle accepted the connection but returned no usage meters this month. Try again after OCI reports usage. No connection or power-off rule was saved."
+      "oracle_no_usage": "Oracle accepted the connection but returned no usage meters this month. Try again after OCI reports usage. No connection or power-off rule was saved.",
+      "no_manual_readings": "No manual source exists for this provider yet. Choose a manual reading first.",
+      "balance_only": "This connection reports available credits, not consumption. Percentages and automatic cutoff do not apply.",
+      "no_notification_services": "No notify services or entities are available. Set up a Home Assistant notification integration first.",
+      "no_notification_channels": "No external notification destinations are configured.",
+      "no_family_sensors": "No matching daily screen-time sensors with a date and minute units are available. Set up the selected family integration first.",
+      "provider_control_unsupported": "This source has no supported provider control API. Use local integration cutoff only for the workload you intend to stop. Oracle power-off has its own form. Family restrictions must be configured in the family app."
     }
   },
   "selector": {

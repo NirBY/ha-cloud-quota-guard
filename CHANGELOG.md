@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.10.0 — 2026-11-14
+
+- Automatically discover scoped HTTP request counters for supported Mashov,
+  Life360, Xiaomi Cloud Map Extractor and owned-session integrations such as
+  Meitav 1.0.2. Persist daily observed counts, handle reloads and label partial days.
+- Stop treating unrelated cloud connections and catalog integrations as missing
+  quota monitors. Keep actual integration errors distinct from unknown allowances.
+- Add grouped AI setup for nine providers, API/team reports and honest manual or
+  sensor paths for personal subscriptions. Add dedicated Tuya and IMOU usage forms.
+- Allow warning/critical amounts and low-balance thresholds without a quota.
+  Keep persistent alerts independent of cutoff; add optional existing HA notify
+  destinations for email, Telegram, GreenAPI and other channels, off by default.
+- Add explicit provider target validation and optional key/API/spend controls.
+  Preserve separate HA cutoff and Oracle SOFTSTOP. Never re-enable automatically.
+- Add Microsoft Family Safety and Google Family Link daily screen-time forms.
+- Add an idempotent English dashboard view installer, automation blueprint,
+  synthetic screenshots and source-backed setup/control documentation.
+
 ## 0.9.0 — 2026-11-14
 
 - Add direct Oracle Cloud API setup using an explicitly supplied OCI signing key.
