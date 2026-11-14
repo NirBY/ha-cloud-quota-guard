@@ -152,7 +152,7 @@
       },
       "source": {
         "title": "Sensor quota source",
-        "description": "Choose a usage sensor, optional allowance and measurement timestamp. A usage-page URL is a reference link. Automatic cutoff is off by default.\n\n[Setup guide: what to enter and how to get credentials](https://github.com/NirBY/ha-cloud-quota-guard/blob/main/README.md#setup-help-sensor).",
+        "description": "Choose a usage sensor, optional allowance and measurement timestamp. A usage-page URL is a reference link. Automatic cutoff is off by default.\n\n[Setup guide: what to enter and how to get credentials]({setup_help_url}).",
         "data": {
           "id": "Metric ID",
           "name": "Name",
@@ -196,7 +196,7 @@
       },
       "github": {
         "title": "Connect GitHub to Quota Guard",
-        "description": "Enter a token explicitly for Quota Guard. We validate it with GitHub and monitor its REST core quota. No repository permissions are needed for the rate-limit endpoint. This does not read another integration’s token or enable cutoff.\n\n[Setup guide: what to enter and how to get credentials](https://github.com/NirBY/ha-cloud-quota-guard/blob/main/README.md#setup-help-github).",
+        "description": "Enter a token explicitly for Quota Guard. We validate it with GitHub and monitor its REST core quota. No repository permissions are needed for the rate-limit endpoint. This does not read another integration’s token or enable cutoff.\n\n[Setup guide: what to enter and how to get credentials]({setup_help_url}).",
         "data": {
           "name": "Connection name",
           "access_token": "GitHub token"
@@ -208,7 +208,7 @@
       },
       "google": {
         "title": "Connect a Google project to Quota Guard",
-        "description": "Paste the service-account JSON key as one line and choose the project APIs to monitor. The key is checked locally; provider access is checked during polling. Enable Service Usage and Cloud Monitoring and grant their read permissions in Google Cloud. No other integration’s credentials are read. Cutoff stays off.\n\n[Setup guide: what to enter and how to get credentials](https://github.com/NirBY/ha-cloud-quota-guard/blob/main/README.md#setup-help-google).",
+        "description": "Paste the service-account JSON key as one line and choose the project APIs to monitor. The key is checked locally; provider access is checked during polling. Enable Service Usage and Cloud Monitoring and grant their read permissions in Google Cloud. No other integration’s credentials are read. Cutoff stays off.\n\n[Setup guide: what to enter and how to get credentials]({setup_help_url}).",
         "data": {
           "name": "Connection name",
           "service_account_info": "Service-account JSON key",

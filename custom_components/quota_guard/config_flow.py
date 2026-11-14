@@ -6,6 +6,10 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
+SETUP_HELP = (
+    "https://github.com/NirBY/ha-cloud-quota-guard/blob/main/README.md#setup-help"
+)
+
 
 class ConfigFlow(config_entries.ConfigFlow, domain="quota_guard"):
     VERSION = 1
@@ -71,6 +75,7 @@ class OptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="github",
             errors=errors,
+            description_placeholders={"setup_help_url": SETUP_HELP + "-github"},
             data_schema=vol.Schema(
                 {
                     vol.Required("name"): str,
@@ -110,6 +115,7 @@ class OptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="google",
             errors=errors,
+            description_placeholders={"setup_help_url": SETUP_HELP + "-google"},
             data_schema=vol.Schema(
                 {
                     vol.Required("name"): str,
@@ -371,5 +377,8 @@ class OptionsFlow(config_entries.OptionsFlow):
             ),
         )
         return self.async_show_form(
-            step_id="source", data_schema=vol.Schema(fields), errors=errors
+            step_id="source",
+            data_schema=vol.Schema(fields),
+            errors=errors,
+            description_placeholders={"setup_help_url": SETUP_HELP + "-sensor"},
         )
