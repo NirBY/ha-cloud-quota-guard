@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.1 — 2026-11-14
+
+- Show supported request counters immediately when their integration starts from
+  cached data and has not yet created an HTTP client. Display "Waiting for HTTP
+  client" without a fabricated zero, then attach and count automatically.
+
 ## 0.10.0 — 2026-11-14
 
 - Automatically discover scoped HTTP request counters for supported Mashov,

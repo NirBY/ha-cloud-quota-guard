@@ -165,7 +165,10 @@ class RequestCounters:
         )
         records = self.data.get("request_counters", {})
         for entry_id, state in self.states.items():
-            if state["state"] != "observing" and entry_id not in records:
+            if (
+                state["state"] not in ("observing", "waiting_for_client")
+                and entry_id not in records
+            ):
                 continue  # An unsupported client is never fabricated as zero usage.
             row = {
                 "config": {

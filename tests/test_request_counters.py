@@ -147,6 +147,7 @@ class RequestCounterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             counters_module.sessions_for(self.hass, self.entry), (self.session,)
         )
+
         self.entry.domain = "life360"
         self.entry.runtime_data = SimpleNamespace(
             coordinator=SimpleNamespace(
@@ -169,3 +170,18 @@ class RequestCounterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             counters_module.sessions_for(self.hass, self.entry), (self.session,)
         )
+
+    async def test_cached_mashov_is_visible_then_counts_when_its_client_opens(self):
+        self.entry.domain = "mashov"
+        self.entry.runtime_data = None
+        client = SimpleNamespace(_session=None)
+        self.hass.data["mashov"] = {"entry": {"client": client}}
+        self.counters.refresh([self.entry])
+        row = list(self.counters.rows())[0]
+        self.assertEqual(row["counter"]["state"], "waiting_for_client")
+        self.assertNotIn("sample", row)
+        self.assertFalse(row["config"]["enforce"])
+        client._session = self.session
+        self.counters.refresh([self.entry])
+        await self.get("/ok")
+        self.assertEqual(self.used(), 1)
