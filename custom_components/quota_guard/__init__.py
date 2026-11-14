@@ -369,7 +369,9 @@ class Guard:
             if metric is None:
                 raise vol.Invalid("Configure the metric first")
             if metric["config"].get("provider_id"):
-                raise vol.Invalid("Provider-managed metrics cannot accept manual reports")
+                raise vol.Invalid(
+                    "Provider-managed metrics cannot accept manual reports"
+                )
             sample = {k: v for k, v in call.data.items() if k != "id"}
             if "limit" not in sample and metric["config"].get("limit") is not None:
                 sample["limit"] = metric["config"]["limit"]

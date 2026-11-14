@@ -1,15 +1,17 @@
 """OCI credentials, quota aggregation, consent and power-action regressions."""
 
 import hashlib
+import importlib
 import json
 import types
 import unittest
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, Mock, patch
 
-from quota_guard import oracle_provider as oracle
 from test_guard import guard
 from test_options_flow import load_flow
+
+oracle = importlib.import_module("quota_guard.oracle_provider")
 
 NOW = datetime(2026, 11, 14, tzinfo=UTC)
 INSTANCE = "ocid1.instance.oc1.iad.aaaaexample"
