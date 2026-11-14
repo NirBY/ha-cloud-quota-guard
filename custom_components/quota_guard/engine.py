@@ -4,9 +4,11 @@ import math
 from datetime import datetime
 
 
-def evaluate(sample, now, max_age=900):
+def evaluate(sample, now, max_age=900, warning_percent=90, cutoff_percent=95):
     """Only a fresh, finite provider sample may trigger a cutoff."""
     try:
+        if not 0 < float(warning_percent) < float(cutoff_percent) <= 100:
+            raise ValueError("Invalid thresholds")
         used = float(sample["used"])
         timestamp = datetime.fromisoformat(sample["timestamp"].replace("Z", "+00:00"))
         if timestamp.tzinfo is None or not sample.get("period"):
@@ -24,9 +26,9 @@ def evaluate(sample, now, max_age=900):
         percent = used / limit * 100
         return {
             "status": "cutoff"
-            if percent >= 95
+            if percent >= cutoff_percent
             else "warning"
-            if percent >= 90
+            if percent >= warning_percent
             else "ok",
             "percent": percent,
             "used": used,
@@ -37,9 +39,13 @@ def evaluate(sample, now, max_age=900):
         return {"status": "unknown", "percent": None}
 
 
-def crossings(previous, current):
+def crossings(previous, current, warning_percent=90, cutoff_percent=95):
     """Record all thresholds on a jump; timestamp is observation, never invented."""
     if current is None:
         return []
     previous = previous if previous is not None else -1
-    return [x for x in (90, 95, 100) if previous < x <= current]
+    return [
+        x
+        for x in sorted({warning_percent, cutoff_percent, 100})
+        if previous < x <= current
+    ]

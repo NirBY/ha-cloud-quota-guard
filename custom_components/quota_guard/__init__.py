@@ -18,6 +18,7 @@ from .diagnostics import connection_issues, metric_issues, retired_issues
 from .engine import crossings, evaluate
 from .google_provider import GoogleProvider
 from .localization import translate
+from .oracle_provider import OracleProvider, stop_instances, validate_targets
 from .provider_policies import policy_for
 from .provider_signals import collect_signals, subscribe
 from .relationships import collect_relationships
@@ -49,6 +50,13 @@ SCHEMA = vol.Schema(
             vol.Coerce(int), vol.Range(min=30, max=86400)
         ),
         vol.Optional("enforce", default=False): cv.boolean,
+        vol.Optional("warning_percent", default=90): vol.All(
+            vol.Coerce(float), vol.Range(min=0.01, max=100)
+        ),
+        vol.Optional("cutoff_percent", default=95): vol.All(
+            vol.Coerce(float), vol.Range(min=0.01, max=100)
+        ),
+        vol.Optional("oracle_instance_ids", default=[]): [cv.string],
     }
 )
 
@@ -248,8 +256,36 @@ class Guard:
 
     async def configure(self, call):
         cfg = dict(call.data)
-        if cfg.get("enforce", False) and not cfg["entry_ids"]:
+        if (
+            not 0
+            < cfg.get("warning_percent", 90)
+            < cfg.get("cutoff_percent", 95)
+            <= 100
+        ):
+            raise vol.Invalid("Warning must be below cutoff, from 0 to 100 percent")
+        current = self.data["metrics"].get(cfg["id"], {})
+        provider_id = current.get("config", {}).get("provider_id")
+        provider = self.providers.get(provider_id, {})
+        oracle = provider.get("type") == "oracle"
+        targets = cfg.get("oracle_instance_ids", [])
+        if targets and not oracle:
+            raise vol.Invalid("Oracle targets require an Oracle API source")
+        if oracle and cfg["entry_ids"]:
+            raise vol.Invalid("Oracle quotas use compute targets, not HA integrations")
+        if cfg.get("enforce") and oracle and (not targets or not cfg.get("limit")):
+            raise vol.Invalid(
+                "Power-off requires a verified allowance and explicit instances"
+            )
+        if cfg.get("enforce", False) and not (cfg["entry_ids"] or (oracle and targets)):
             raise vol.Invalid("At least one target integration is required")
+        verified_targets = []
+        if targets:
+            try:
+                verified_targets = await self.hass.async_add_executor_job(
+                    validate_targets, provider["credentials"], targets
+                )
+            except Exception as error:
+                raise vol.Invalid("Oracle instance validation failed") from error
         for id in cfg["entry_ids"]:
             e = self.hass.config_entries.async_get_entry(id)
             if not e or e.domain == DOMAIN:
@@ -283,7 +319,11 @@ class Guard:
                         if str(k) in old_config
                     }
                 )
-                if any(cfg.get(k) != normalized.get(k) for k in measurement_fields):
+                if any(
+                    cfg.get(k) != normalized.get(k)
+                    for k in measurement_fields
+                    if not (oracle and k == "limit")
+                ):
                     raise vol.Invalid("Provider measurements cannot be overwritten")
                 cfg = {**old_config, **cfg}
             if not old_config.get("provider_id") and any(
@@ -298,9 +338,28 @@ class Guard:
             self.data["metrics"][cfg["id"]] = {
                 **old,
                 "config": cfg,
-                "cutoff_authorized": bool(cfg.get("enforce") and cfg["entry_ids"]),
+                "cutoff_authorized": bool(
+                    cfg.get("enforce") and (cfg["entry_ids"] or (oracle and targets))
+                ),
                 "status": "unknown",
             }
+            if oracle:
+                self.data["metrics"][cfg["id"]]["oracle_targets"] = verified_targets
+                if (
+                    not cfg.get("enforce")
+                    or old_config.get("oracle_instance_ids") != targets
+                ):
+                    self.data["metrics"][cfg["id"]].pop("cutoff_result", None)
+                if old.get("sample"):
+                    self.data["metrics"][cfg["id"]]["sample"] = {
+                        **old["sample"],
+                        "limit": cfg.get("limit"),
+                    }
+            if any(
+                old_config.get(k) != cfg.get(k)
+                for k in ("warning_percent", "cutoff_percent", "limit")
+            ):
+                self.data["metrics"][cfg["id"]].update(last_percent=None, notified=[])
             await self.store.async_save(self.data)
         await self.tick(refresh_providers=False)
 
@@ -309,6 +368,8 @@ class Guard:
             metric = self.data["metrics"].get(call.data["id"])
             if metric is None:
                 raise vol.Invalid("Configure the metric first")
+            if metric["config"].get("provider_id"):
+                raise vol.Invalid("Provider-managed metrics cannot accept manual reports")
             sample = {k: v for k, v in call.data.items() if k != "id"}
             if "limit" not in sample and metric["config"].get("limit") is not None:
                 sample["limit"] = metric["config"]["limit"]
@@ -392,6 +453,7 @@ class Guard:
             async with self.poll_lock:
                 await self.github_samples(dt_util.utcnow())
                 await self.google_samples()
+                await self.oracle_samples()
                 await self.evaluate_metrics()
         else:
             await self.evaluate_metrics()
@@ -411,7 +473,13 @@ class Guard:
                 if cfg.get("usage_entity"):
                     m["sample"] = sensor_sample(cfg, self.hass.states, now)
                 sample = m.get("sample", {})
-                decision = evaluate(sample, now, cfg["max_age"])
+                decision = evaluate(
+                    sample,
+                    now,
+                    cfg["max_age"],
+                    cfg.get("warning_percent", 90),
+                    cfg.get("cutoff_percent", 95),
+                )
                 old_status = m.get("status")
                 m.update(decision)
                 if decision["status"] == "usage_only":
@@ -502,7 +570,12 @@ class Guard:
                         }
                     )
                     m["points"] = points[-3000:]
-                for threshold in crossings(m.get("last_percent"), pct):
+                for threshold in crossings(
+                    m.get("last_percent"),
+                    pct,
+                    cfg.get("warning_percent", 90),
+                    cfg.get("cutoff_percent", 95),
+                ):
                     if threshold not in m.setdefault("notified", []):
                         m["notified"].append(threshold)
                         await self.event(
@@ -518,7 +591,7 @@ class Guard:
                         )
                 m["last_percent"] = pct
                 if (
-                    pct >= 95
+                    pct >= cfg.get("cutoff_percent", 95)
                     and cfg.get("enforce")
                     and m.get("cutoff_authorized")
                     and not any(
@@ -527,6 +600,22 @@ class Guard:
                     )
                 ):
                     result = {}
+                    provider = self.providers.get(cfg.get("provider_id"), {})
+                    if provider.get("type") == "oracle" and cfg.get(
+                        "oracle_instance_ids"
+                    ):
+                        try:
+                            result = await self.hass.async_add_executor_job(
+                                stop_instances,
+                                provider["credentials"],
+                                cfg["oracle_instance_ids"],
+                                m.get("cutoff_result", {}),
+                            )
+                        except Exception:
+                            result = {
+                                id: "power_off_failed"
+                                for id in cfg["oracle_instance_ids"]
+                            }
                     for eid in cfg["entry_ids"]:
                         e = self.hass.config_entries.async_get_entry(eid)
                         if not e or e.domain == DOMAIN:
@@ -551,7 +640,7 @@ class Guard:
                         await self.event(
                             id,
                             "cutoff",
-                            95,
+                            cfg.get("cutoff_percent", 95),
                             self.text("Cutoff: ") + ", ".join(result.values()),
                         )
             await self.store.async_save(self.data)
@@ -576,6 +665,8 @@ class Guard:
                 metric.pop("sample", None)
             metric.update(row)
             metric["config"] = config
+            if row.get("provider_kind") == "oracle" and "sample" in row:
+                metric["sample"]["limit"] = config.get("limit")
 
     async def github_samples(self, now):
         """Read core usage only with a token supplied to Quota Guard itself."""
@@ -650,6 +741,42 @@ class Guard:
             return
         for row in results:
             await self.apply_provider_row(row)
+
+    async def oracle_samples(self):
+        if not hasattr(self, "oracle"):
+            self.oracle = OracleProvider()
+        for id, provider in tuple(self.providers.items()):
+            if provider.get("type") != "oracle":
+                continue
+            rows = await self.hass.async_add_executor_job(
+                self.oracle.fetch, {"id": id, **provider}
+            )
+            if id not in self.providers:
+                continue
+            for row in rows or []:
+                await self.apply_provider_row(row)
+
+    async def replace_oracle_meters(self, provider_id, meters):
+        async with self.poll_lock, self.lock:
+            provider = self.providers.get(provider_id)
+            if not provider or provider.get("type") != "oracle":
+                raise vol.Invalid("Oracle connection no longer exists")
+            providers = {**self.providers, provider_id: {**provider, "meters": meters}}
+            self.hass.config_entries.async_update_entry(
+                self.entry, data={**self.entry.data, "providers": providers}
+            )
+            desired = {"qg_oracle_" + provider_id + "_" + m["id"] for m in meters}
+            for id, metric in list(self.data["metrics"].items()):
+                if (
+                    metric["config"].get("provider_id") == provider_id
+                    and id not in desired
+                ):
+                    self.retire_metric(id)
+            if hasattr(self, "oracle"):
+                self.oracle.checked.pop(provider_id, None)
+            await self.store.async_save(self.data)
+            for listener in tuple(self.listeners):
+                listener()
 
     async def provider_signals_refresh(self):
         """Notify once per active provider failure, separately from numeric quotas."""

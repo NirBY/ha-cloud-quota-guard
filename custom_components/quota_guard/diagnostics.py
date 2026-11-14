@@ -267,7 +267,11 @@ def metric_issues(metric, states, entries, now):
                 )
             )
     if cfg.get("enforce") and (
-        not cfg.get("entry_ids") or not metric.get("cutoff_authorized")
+        not (
+            cfg.get("entry_ids")
+            or (cfg.get("provider_kind") == "oracle" and cfg.get("oracle_instance_ids"))
+        )
+        or not metric.get("cutoff_authorized")
     ):
         result.append(
             issue(
@@ -275,6 +279,19 @@ def metric_issues(metric, states, entries, now):
                 "Automatic cutoff has not been explicitly authorized for valid targets.",
                 "Select cutoff targets and explicitly enable cutoff, or leave monitoring only.",
                 field="enforce",
+            )
+        )
+    if cfg.get("enforce") and any(
+        value in ("power_off_failed", "state_not_eligible")
+        for value in metric.get("cutoff_result", {}).values()
+    ):
+        result.append(
+            issue(
+                "oracle_power_off_failed",
+                "Oracle power-off did not complete for a selected instance.",
+                "Check the instance state and INSTANCE_POWER_ACTION permission. Monitoring continues; no restart or termination is attempted.",
+                severity="warning",
+                field="oracle_instance_ids",
             )
         )
     return result

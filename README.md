@@ -7,7 +7,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=NirBY&repository=ha-cloud-quota-guard&category=integration)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Cloud Quota Guard is a **custom Home Assistant integration**, distributed through HACS, with a bundled dashboard card. It monitors verified cloud usage sources, warns at **90%**, and can disable explicitly mapped integrations at **95%**.
+Cloud Quota Guard is a **custom Home Assistant integration**, distributed through HACS, with a bundled dashboard card. It monitors cloud usage with user-configurable warning and cutoff percentages (defaults **90% / 95%**). Optional cutoff disables selected Home Assistant integrations or powers off explicitly selected Oracle compute instances.
 
 **Unknown is never zero.** A service with no verified quota source is clearly labeled as unknown and is not protected. Disabling a Home Assistant integration is not a provider-side spending cap.
 
@@ -104,17 +104,77 @@ leaves the usage entity unavailable; the dashboard explains the delayed report.
 It does not invent a zero-use measurement. A 403 error usually requires checking
 the project, enabled APIs and read permissions. Follow the error shown in details.
 
+### Setup help Oracle
+
+Choose **Configure → Connect Oracle Cloud API**. This connects directly to OCI
+using credentials entered into Quota Guard. It works independently of an external
+scanner or Home Assistant usage sensor. Oracle uses an **API signing key**, not an
+OCI auth token, console password or compute-instance SSH key.
+
+1. In OCI, open your user's **API keys** and create or select a signing key. Keep
+   the private PEM key locally. See [Oracle's signing-key instructions](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/apisigningkey.htm).
+2. Grant the key's user the permissions needed to read reported usage:
+   `Allow group <your-group> to read usage-report in tenancy`.
+   See [Oracle Cost Analysis permissions](https://docs.oracle.com/en-us/iaas/Content/Billing/Concepts/costanalysisoverview.htm).
+3. Enter a **Connection name**, **Tenancy OCID**, **User OCID**, **API key
+   fingerprint**, **OCI home region** (for example `il-jerusalem-1`), and the
+   complete **API signing private key (PEM)**. Enter its passphrase only if encrypted.
+   Multiline PEM, flattened PEM and escaped newlines are accepted. The key is
+   checked against the fingerprint locally before Oracle is contacted. No OCI
+   profile, key file, instance principal or other integration's credentials are read.
+4. Select the returned **Usage meters**. Each service/SKU/unit combination remains
+   separate. The selected meters appear under the Oracle service and dashboard.
+   Use **Choose Oracle usage meters** later to add or archive selections.
+5. For each meter, choose **Configure thresholds and cutoff**, then enter the
+   **verified monthly allowance** applicable to your account and the meter's exact
+   unit. Leave it blank for usage-only monitoring. The Usage API does not identify
+   every free-tier entitlement; the plugin does not invent a universal free limit.
+
+This supports reported monthly usage meters across OCI services and commercial
+regions; it is not tied to one application or tenancy. Only meters returned by the
+Usage API can be selected. Resource counts, real-time utilization and allowances
+absent from that API are not inferred. Usage is queried every 15 minutes using the
+UTC calendar month. A new/quiet account may have no selectable meters until Oracle
+publishes usage. Missing or failed reports do not become zero-use measurements.
+
+#### Oracle power-off and configurable percentages
+
+**Warning percentage** and **Power-off percentage** are configurable per meter.
+The defaults are 90 and 95; choose any `0 < warning < cutoff <= 100`. The same
+percentages drive notifications, charts and the automatic-action decision.
+
+To enable Oracle power-off, enter the exact **Compute instance OCIDs** in the
+connection's region, press Enter after each, enable power-off and confirm that
+those instances consume the selected quota. Quota Guard checks each instance
+before saving. The credential needs permission to read each selected instance
+and perform `INSTANCE_POWER_ACTION`. Restrict IAM access to the intended
+compartment/instances; see [Oracle's Compute policy reference](https://docs.oracle.com/en-us/iaas/Content/Identity/Reference/corepolicyreference.htm).
+
+Saving an enabled rule can act immediately if the current reported usage is
+already above the threshold. The only cloud mutation is `SOFTSTOP` on those
+selected running instances. It requests graceful shutdown; OCI powers off after
+15 minutes if shutdown has not completed. The integration never starts, restarts
+or terminates resources. See [Oracle instance power actions](https://docs.oracle.com/en-us/iaas/tools/python/latest/api/core/client/oci.core.ComputeClient.html#oci.core.ComputeClient.instance_action).
+
+Oracle usage reports are delayed, so this is not a guaranteed spending cap.
+Stopping compute does not stop storage or other resource charges. Select a
+threshold that leaves headroom for reporting delay. Stale/unknown measurements,
+missing allowances and unconfirmed targets cannot trigger power-off. Other
+providers' cutoff screens disable Home Assistant integrations; Oracle's screen
+explicitly identifies compute power-off.
+
 ### Setup help sensor
 
 Choose **Add sensor source**, or **Add source** on the quota dashboard. Select an
 existing usage sensor, its unit and an optional verified allowance. Set the actual
 source timestamp and reporting period. A web page URL alone is not a data source.
 
-For Security Scanner, use `sensor.security_scanner_free_usage`, unit `%`, fixed
-allowance `100`, timestamp attribute `checked_at`, **Calendar month**, timezone
-`UTC`, and maximum age `900` seconds. This is the scanner's conservative estimate.
-Leave **Usage page URL** blank if its old standalone dashboard has been removed.
-The source appears as its own device and usage entity after saving.
+For an external Oracle Free Tier estimate, select the usage sensor published by
+your own monitor. Use `%` and a fixed allowance of `100` only if that sensor already
+reports a percentage. Configure its actual timestamp attribute, reporting period,
+reset timezone and update interval. Name it **Oracle Free Tier — external usage
+estimate**. Any compatible sensor is supported; a monitor/application name is not
+required. Use **Connect Oracle Cloud API** for direct API monitoring and power-off.
 
 ### After saving
 
@@ -132,7 +192,7 @@ automatic cutoff requires a separate explicit configuration.
 - Links to mapped cutoff integrations and directly related automations.
 - Click a tile for provider details, reset period and recorded usage history.
 - Graph ranges: one hour, 24 hours, seven days, or all retained observations.
-- Focus on small utilization values, or show the full 90%/95% threshold scale.
+- Focus on small utilization values, or show the full scale with your configured thresholds.
 - Separate **unknown allowance**, **missing/stale measurement**, and **fresh measurement**.
 - Search and filters for monitored quotas, services needing attention and unknown limits.
 - Inventory of integrations, including local/calculated services and cloud services without a source.
@@ -211,11 +271,12 @@ If your frontend blocks automatic modules, manually add the resource `/quota_gua
 | Google Assistant SDK | Project daily conversation request usage | User-supplied Quota Guard service account, Service Usage and Cloud Monitoring read permissions, explicit API selection. |
 | Google Cloud TTS | Highest reported project request-minute in the provider day | API quota, **not** free/billable voice characters. |
 | Google Calendar | Highest reported project request-minute in the provider day | Project quota, not per-user quota. |
+| Oracle Cloud | Reported monthly usage by selected service/SKU/unit | Own OCI API signing key, read usage-report access and user-verified allowance. Optional explicitly selected compute power-off. |
 | Tuya | Reference policy only; no built-in measurement | Connect a verified sensor or administrator report if available. Quota Guard does not patch the Tuya SDK. |
 | Generic sensor | Your verified current-period usage and limit | A source-provided period identifier and timezone-aware timestamp are required. |
 | Administrator report action | Measurements from another trusted adapter | Configure the metric first. No public/unauthenticated webhook is exposed. |
 
-All sources default to monitor-only (`enforce: false`). GitHub/Google connections are opt-in, with no inferred target integrations. Only an explicit administrator configuration can authorize cutoff for selected targets. This release uses fixed 90% warning and 95% cutoff thresholds.
+All sources default to monitor-only (`enforce: false`). GitHub, Google and Oracle API connections are opt-in. Only an explicit administrator configuration can authorize cutoff for selected targets. Warning and cutoff percentages are configurable for every source; the defaults are 90% and 95%.
 
 Google quotas are read from the provider's effective limits, rather than assumed free-tier values. Quota limits are cached for one hour. Usage is polled every minute; Google's reporting is delayed and the daily window follows **America/Los_Angeles**. A successful current-day query with no samples displays **0 requests reported**, with a check time and period. This is a reporting observation, not a verified zero-use quota sample: no percentage, remaining balance, cutoff or zero graph point is derived from it. An expired or failed query still raises a loss-of-measurement alert. The adapter does not enable Google APIs or grant permissions for you. The project comes from the service account supplied to Quota Guard. Select the APIs to monitor explicitly; no OAuth/config-entry matching is performed.
 
@@ -236,8 +297,8 @@ See the field-by-field [GitHub setup guide](#setup-help-github) and
 [Google setup guide](#setup-help-google) for credentials, read permissions,
 examples and what to expect after saving.
 
-Use **Configure → Configure cutoff targets** to select a measured quota, explicitly
-map its target integrations, and opt in to disabling at 95%. This screen calls the
+Use **Configure → Configure thresholds and cutoff** to select a measured quota,
+choose its warning/cutoff percentages, explicitly map targets, and opt in. This screen calls the
 same administrator configuration handler as `quota_guard.configure`. Automatic
 polls cannot add targets or turn cutoff on. A monitoring connection never implies
 permission to disable another integration.
@@ -315,13 +376,11 @@ service does not require a Home Assistant integration mapping. Enabling cutoff
 requires explicitly selected target integrations and only acts on fresh numeric
 measurements. Existing provider-side shutdown controls remain independent.
 
-For the Security Scanner example, select `sensor.security_scanner_free_usage`,
-unit `%`, allowance `100`, timestamp attribute `checked_at`, and your verified
-monthly reset timezone. An optional usage-page link must point to an existing
-page; omit it if the old view was removed. Name the source
-**Security Scanner — Oracle free-tier safety estimate**: this is a conservative estimate with a
-reporting reserve, not a provider billing counter. Leave Quota Guard cutoff off;
-the scanner has its own shutdown policy. See [example configuration](examples/security-scanner.yaml).
+For an external Oracle Free Tier source, choose your own verified sensor and its
+actual unit, allowance, timestamp and period. Keep estimates labeled as estimates.
+See the [generic sensor example](examples/oracle-free-tier.yaml), or use
+[direct Oracle API setup](#setup-help-oracle) to configure API usage and compute
+power-off without relying on an external monitor.
 
 ### Usage when the limit is unknown
 
@@ -422,7 +481,7 @@ Non-finite/negative values, invalid limits, missing periods, stale/future timest
   survives restarts and resets on recovery, so forwarding persistent notifications
   to Telegram does not generate a message every minute for the same condition.
 - Event `quota_guard_event` carries `id`, `kind`, `threshold`, `detected_at`, `source_at`, `period` and `message`. Route this event to your preferred notification service with an automation; no personal mobile destination is hardcoded.
-- At 95% or above, an enforced metric requests persistent disabling of its mapped config entries.
+- At the configured cutoff percentage, an enforced metric requests disabling of its mapped Home Assistant config entries, or Oracle SOFTSTOP for its explicitly selected compute instances.
 - Cutoff results distinguish `disabled`, `restart_required`, `failed` and `missing`. An unsuccessful unload is not reported as protection.
 - Integrations remain disabled until you manually enable them, even after quota reset.
 - Missing measurements do not trigger speculative disabling of unrelated integrations.

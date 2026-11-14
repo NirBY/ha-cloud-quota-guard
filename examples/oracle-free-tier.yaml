@@ -1,0 +1,20 @@
+# Generic external sensor example. Replace the sensor and metadata with yours.
+# Use the direct Oracle API setup for native usage meters and compute power-off.
+# A 100% allowance is appropriate only when the source already reports percent.
+action: quota_guard.configure
+data:
+  id: oracle_free_tier_estimate
+  name: Oracle Free Tier — external usage estimate
+  source: External Oracle Free Tier usage estimate
+  usage_entity: sensor.your_oracle_usage_percent
+  kind: free_allowance
+  unit: "%"
+  limit: 100
+  timestamp_attribute: sampled_at
+  period_mode: monthly
+  period_timezone: UTC
+  max_age: 900
+  warning_percent: 90
+  cutoff_percent: 95
+  entry_ids: []
+  enforce: false

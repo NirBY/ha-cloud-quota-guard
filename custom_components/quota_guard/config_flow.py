@@ -6,6 +6,8 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
+from .oracle_flow import OracleFlow, threshold_fields
+
 SETUP_HELP = (
     "https://github.com/NirBY/ha-cloud-quota-guard/blob/main/README.md#setup-help"
 )
@@ -27,7 +29,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain="quota_guard"):
         return self.async_show_form(step_id="user", data_schema=vol.Schema({}))
 
 
-class OptionsFlow(config_entries.OptionsFlow):
+class OptionsFlow(OracleFlow, config_entries.OptionsFlow):
     """Configure sensor sources from the integration's Configure button."""
 
     _source_id = None
@@ -42,6 +44,8 @@ class OptionsFlow(config_entries.OptionsFlow):
                 "edit",
                 "github",
                 "google",
+                "oracle",
+                "oracle_manage",
                 "remove_provider",
                 "mapping",
             ],
@@ -200,6 +204,11 @@ class OptionsFlow(config_entries.OptionsFlow):
         current = manager.data["metrics"].get(self._source_id, {}).get("config")
         if current is None:
             return self.async_abort(reason="no_metrics")
+        if (
+            manager.providers.get(current.get("provider_id"), {}).get("type")
+            == "oracle"
+        ):
+            return await self.async_step_oracle_cutoff(user_input)
         errors = {}
         if user_input is not None:
             data = {str(k): current[str(k)] for k in SCHEMA.schema if str(k) in current}
@@ -221,6 +230,7 @@ class OptionsFlow(config_entries.OptionsFlow):
             errors=errors,
             data_schema=vol.Schema(
                 {
+                    **threshold_fields(current),
                     vol.Required("enforce", default=False): bool,
                     vol.Optional(
                         "entry_ids",
@@ -370,6 +380,7 @@ class OptionsFlow(config_entries.OptionsFlow):
             True,
         )
         add("enforce", bool, True)
+        fields.update(threshold_fields(defaults))
         add(
             "entry_ids",
             selector.SelectSelector(

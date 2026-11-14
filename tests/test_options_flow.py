@@ -57,7 +57,7 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.flow = load_flow().OptionsFlow()
         self.manager = types.SimpleNamespace(
-            data={"metrics": {}}, configure=AsyncMock(), listeners=[]
+            data={"metrics": {}}, configure=AsyncMock(), listeners=[], providers={}
         )
         self.flow.hass = types.SimpleNamespace(
             data={"quota_guard": self.manager},

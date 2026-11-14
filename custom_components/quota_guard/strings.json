@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Cloud Quota Guard",
-        "description": "Discover cloud integrations and monitor quota sources. Warns at 90% and disables explicitly mapped integrations at 95%. Add sensor sources using Configure. Missing sources are not protected."
+        "description": "Monitor verified cloud quota sources. Configure warning and cutoff percentages per source. Automatic actions require explicit targets and consent."
       }
     },
     "abort": {
@@ -26,7 +26,7 @@
         },
         "entry_ids": {
           "name": "Target integration IDs",
-          "description": "Config entry IDs to disable at the cutoff; cannot target Quota Guard itself."
+          "description": "Home Assistant config entry IDs to disable at this source's cutoff percentage. Oracle sources use compute instance OCIDs instead."
         },
         "kind": {
           "name": "Quota type",
@@ -65,8 +65,8 @@
           "description": "Seconds until a measurement is considered stale (30–86400)."
         },
         "enforce": {
-          "name": "Disable at 95%",
-          "description": "Disable explicitly mapped integrations at 95%; never automatically re-enable them."
+          "name": "Enable automatic cutoff",
+          "description": "Use this source's selected cutoff percentage. Oracle sources power off selected compute instances; other sources disable mapped Home Assistant integrations. Never automatically restart."
         },
         "usage_url": {
           "name": "Usage page URL",
@@ -91,6 +91,18 @@
         "period_timezone": {
           "name": "Month reset timezone",
           "description": "Provider timezone for calendar-month periods, for example UTC or Asia/Jerusalem. Samples from an earlier month are not reused."
+        },
+        "warning_percent": {
+          "name": "Warning percentage",
+          "description": "Percentage at which to alert; must be lower than cutoff."
+        },
+        "cutoff_percent": {
+          "name": "Cutoff percentage",
+          "description": "User-selected automatic-action threshold, above warning and no higher than 100."
+        },
+        "oracle_instance_ids": {
+          "name": "Oracle compute instance OCIDs",
+          "description": "Only for an Oracle API source. Explicit instance targets checked against the connection's region; never inferred from a sensor or HA integration."
         }
       }
     },
@@ -141,7 +153,9 @@
           "github": "Connect GitHub",
           "google": "Connect Google project",
           "remove_provider": "Remove provider connection",
-          "mapping": "Configure cutoff targets"
+          "mapping": "Configure thresholds and cutoff",
+          "oracle": "Connect Oracle Cloud API",
+          "oracle_manage": "Choose Oracle usage meters"
         }
       },
       "edit": {
@@ -165,13 +179,15 @@
           "period_attribute": "Period attribute",
           "timestamp_attribute": "Timestamp attribute",
           "max_age": "Maximum age",
-          "enforce": "Disable at 95%",
+          "enforce": "Enable automatic integration cutoff",
           "usage_url": "Usage page URL",
           "usage_attribute": "Usage attribute",
           "period_entity": "Period sensor",
           "timestamp_entity": "Timestamp sensor",
           "period_mode": "Reporting period",
-          "period_timezone": "Month reset timezone"
+          "period_timezone": "Month reset timezone",
+          "warning_percent": "Warning percentage",
+          "cutoff_percent": "Cutoff percentage"
         },
         "data_description": {
           "id": "Stable lowercase identifier (letters, digits and underscores).",
@@ -234,27 +250,83 @@
         }
       },
       "cutoff": {
-        "title": "Configure automatic cutoff",
-        "description": "Explicitly select the integrations this metric may disable at 95%. Confirm the quota belongs to those integrations. Disabling persists across restarts and period resets. Already disabled integrations are never re-enabled automatically. Leave cutoff off for monitoring only.",
+        "title": "Configure thresholds and integration cutoff",
+        "description": "Choose warning and cutoff percentages. When enabled, only the explicitly selected Home Assistant integrations may be disabled at your cutoff percentage. This does not power off cloud resources. Disabled integrations are never re-enabled automatically. Leave cutoff off for monitoring only.",
         "data": {
-          "enforce": "Enable cutoff at 95%",
-          "entry_ids": "Target integrations"
+          "enforce": "Enable automatic integration cutoff",
+          "entry_ids": "Target integrations",
+          "warning_percent": "Warning percentage",
+          "cutoff_percent": "Cutoff percentage"
+        }
+      },
+      "oracle": {
+        "title": "Connect Oracle Cloud API",
+        "description": "Use an OCI API signing key supplied directly to Quota Guard. OCI auth tokens, SSH keys and API keys from other integrations are not used. This step only reads usage. [Setup guide]({setup_help_url}).",
+        "data": {
+          "name": "Connection name",
+          "tenancy": "Tenancy OCID",
+          "user": "User OCID",
+          "fingerprint": "API key fingerprint",
+          "region": "OCI home region",
+          "private_key": "API signing private key (PEM)",
+          "pass_phrase": "Private-key passphrase (optional)"
+        },
+        "data_description": {
+          "region": "For example il-jerusalem-1. Use the tenancy home region for usage reports and the region containing your cutoff instances.",
+          "private_key": "Paste the complete PEM file, including BEGIN and END lines. Multiline and flattened pastes are accepted. This is not an OCI auth token or an instance SSH key.",
+          "fingerprint": "Copy the fingerprint shown under your OCI user's API keys."
+        }
+      },
+      "oracle_manage": {
+        "title": "Choose an Oracle connection",
+        "data": {
+          "provider_id": "Oracle API connection"
+        }
+      },
+      "oracle_meters": {
+        "title": "Choose Oracle usage meters",
+        "description": "Select the service/product/unit combinations to monitor. These are reported usage meters, not automatically verified free allowances. After saving, use Configure thresholds and cutoff to enter your allowance and percentages for each meter. Unselected meters are archived with history retained. [Setup guide]({setup_help_url}).",
+        "data": {
+          "meter_ids": "Usage meters"
+        }
+      },
+      "oracle_cutoff": {
+        "title": "Oracle allowance, thresholds and power-off",
+        "description": "{source_name}. Enter the verified monthly allowance in {unit}. Warning and cutoff percentages are your choice. When enabled, Quota Guard sends SOFTSTOP only to the instance OCIDs you enter, in this connection's region. Confirm that stopping them reduces this quota's usage. No instance is restarted automatically. Oracle reports are delayed, and stopping compute does not stop storage or other resource charges. [Setup guide]({setup_help_url}). Saving an enabled rule may request power-off immediately if reported usage is already at or above your threshold.",
+        "data": {
+          "limit": "Verified monthly allowance (optional)",
+          "warning_percent": "Warning percentage",
+          "cutoff_percent": "Power-off percentage",
+          "oracle_instance_ids": "Compute instance OCIDs",
+          "enforce": "Enable automatic Oracle power-off",
+          "confirm_targets": "I confirm these instances consume this quota and may be powered off"
+        },
+        "data_description": {
+          "limit": "Use the allowance and exact unit applicable to your account. Leave blank for usage-only monitoring.",
+          "oracle_instance_ids": "Paste each full instance OCID and press Enter. Every selected instance is checked against Oracle before saving.",
+          "cutoff_percent": "Must be greater than the warning percentage and no higher than 100. You can choose a lower threshold to allow for delayed reports."
         }
       }
     },
     "error": {
       "duplicate_id": "This source ID already exists.",
       "sensor_missing": "Choose an existing sensor.",
-      "targets_required": "Choose integrations for automatic cutoff.",
+      "targets_required": "Use warning below cutoff (0–100%) and select valid targets before enabling automatic cutoff.",
       "invalid_source": "Check the source ID, URL, timezone and measurement settings.",
       "cannot_connect": "Could not validate the token with GitHub. Check the token and connection.",
-      "invalid_credentials": "Enter a valid Google service-account JSON key and select APIs."
+      "invalid_credentials": "Enter a valid Google service-account JSON key and select APIs.",
+      "invalid_oracle_credentials": "Check the tenancy/user OCIDs, region, API key fingerprint, complete PEM key and optional passphrase.",
+      "oracle_access_failed": "Oracle usage could not be read. Check the home region, API signing credentials and read usage-report permission.",
+      "oracle_meters_required": "Select at least one reported usage meter.",
+      "oracle_confirmation_required": "Confirm that the selected compute instances consume this quota before enabling power-off.",
+      "oracle_cutoff_invalid": "Use a positive allowance, warning below cutoff (0–100%), and valid instance OCIDs in this connection's region. Check read-instance access. Power-off also needs INSTANCE_POWER_ACTION permission."
     },
     "abort": {
       "not_loaded": "Load Cloud Quota Guard before configuring sources.",
       "no_sources": "No sensor sources to edit. Add a source first.",
       "no_providers": "No provider connections to remove.",
-      "no_metrics": "No active metrics. Add a source or wait for the next provider poll."
+      "no_metrics": "No active metrics. Add a source or wait for the next provider poll.",
+      "oracle_no_usage": "Oracle accepted the connection but returned no usage meters this month. Try again after OCI reports usage. No connection or power-off rule was saved."
     }
   },
   "selector": {

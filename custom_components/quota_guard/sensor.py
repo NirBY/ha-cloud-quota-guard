@@ -32,12 +32,18 @@ def source_device(guard, metric_id):
 
 def provider_device(guard, provider_id):
     provider = guard.providers[provider_id]
-    title = "GitHub" if provider["type"] == "github" else "Google"
+    title = {"github": "GitHub", "google": "Google", "oracle": "Oracle"}[
+        provider["type"]
+    ]
     return {
         "identifiers": {(DOMAIN, "provider:" + provider_id)},
         "name": title + " — " + provider["name"],
         "manufacturer": title,
-        "model": "REST core quota" if title == "GitHub" else "Project API quotas",
+        "model": {
+            "github": "REST core quota",
+            "google": "Project API quotas",
+            "oracle": "Free Tier usage and compute power-off",
+        }[provider["type"]],
         "entry_type": dr.DeviceEntryType.SERVICE,
         "configuration_url": HELP_URL + "-" + provider["type"],
     }
@@ -127,7 +133,15 @@ class Connection(SourceEntity):
             for m in self.guard.data["metrics"].values()
             if m["config"].get("provider_id") == self.id
         ]
-        expected = 1 if provider["type"] == "github" else len(provider["services"])
+        expected = (
+            1
+            if provider["type"] == "github"
+            else len(
+                provider["meters"]
+                if provider["type"] == "oracle"
+                else provider["services"]
+            )
+        )
         if not metrics or len(metrics) < expected:
             return "pending"
         if any(
@@ -188,6 +202,8 @@ class Usage(SourceEntity):
             self.metric.get("sample") or {},
             dt_util.utcnow(),
             self.metric.get("config", {}).get("max_age", 900),
+            self.metric.get("config", {}).get("warning_percent", 90),
+            self.metric.get("config", {}).get("cutoff_percent", 95),
         )
         return decision.get("used")
 
@@ -207,6 +223,11 @@ class Usage(SourceEntity):
             "automatic_cutoff": bool(
                 m.get("cutoff_authorized") and m.get("config", {}).get("enforce")
             ),
+            "warning_percent": m.get("config", {}).get("warning_percent", 90),
+            "cutoff_percent": m.get("config", {}).get("cutoff_percent", 95),
+            "cutoff_action": "Oracle compute power-off"
+            if m.get("provider_kind") == "oracle"
+            else "Disable Home Assistant integrations",
         }
 
 
@@ -238,6 +259,5 @@ class Coverage(SensorEntity):
                 r["coverage"] == "needs_setup" for r in self.guard.inventory
             ),
             "configured_metrics": len(self.guard.data["metrics"]),
-            "warning_threshold": 90,
-            "cutoff_threshold": 95,
+            "thresholds": "Configured per source",
         }

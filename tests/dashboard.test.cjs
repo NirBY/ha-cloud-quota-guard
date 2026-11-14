@@ -6,6 +6,25 @@ const path=require('node:path');
 let Card;
 const context={HTMLElement:class {attachShadow(){return {}; }},customElements:{get(){},define(name,value){Card=value;}},window:{},setInterval,clearInterval,Date,URL};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../custom_components/quota_guard/frontend/quota-guard-card.js'),'utf8'),context);
+
+test('custom percentages drive status, chart markers, labels and form validation',()=>{
+ const card=new Card(),now=new Date().toISOString();
+ const m={type:'metric',key:'oracle',provider_kind:'oracle',config:{id:'qg_oracle_test',name:'Oracle Free Tier',kind:'free_allowance',unit:'OCPU hours',max_age:1800,warning_percent:60,cutoff_percent:75,enforce:true},status:'cutoff',cutoff_authorized:true,percent:80,sample:{used:80,limit:100,timestamp:now,period:'month'},points:[{at:now,source_at:now,percent:80,used:80,period:'month'}]};
+ assert.equal(card.state(m)[0],'danger');assert.match(card.coverage(m),/75%/);
+ assert.match(card.tile(m),/left:60%/);assert.match(card.tile(m),/left:75%/);
+ assert.match(card.detail(m),/Warning at 60%/);assert.match(card.detail(m),/Oracle power-off at 75%/);
+ assert.doesNotMatch(card.detail(m),/at 95%/);assert.match(card.graph(m),/>75%/);
+ card._hass={states:{'sensor.test':{state:'80'}}};
+ const draft={id:'test',name:'Test',unit:'%',usage_entity:'sensor.test',warning_percent:60,cutoff_percent:75};
+ assert.equal(card.sourceConfig(draft).cutoff_percent,75);
+ assert.throws(()=>card.sourceConfig({...draft,warning_percent:75}),/Warning must be below cutoff/);
+});
+
+test('Oracle empty reporting never appears as a Google zero-use measurement',()=>{
+ const card=new Card(),m={type:'metric',key:'oracle',provider_kind:'oracle',config:{id:'qg_oracle_test',name:'Oracle Free Tier',unit:'GB hours',max_age:1800},status:'no_activity_reported',reporting:{state:'no_activity_reported',checked_at:new Date().toISOString()}};
+ assert.match(card.tile(m),/No reported usage this month/);
+ assert.doesNotMatch(card.detail(m),/Google|0 requests|requests reported today/);
+});
 test('an empty successful response shows reported zero without quota percentage or balance',()=>{
  const card=new Card();const m={type:'metric',key:'assistant',config:{id:'assistant',name:'Assistant',unit:'בקשות ביום',max_age:600},verified_limit:500,status:'no_activity_reported',percent:null,reporting:{state:'no_activity_reported',reported_used:0,checked_at:new Date().toISOString(),period:'today'}};
  assert.equal(card.fresh(m),false);assert.equal(card.reportedEmpty(m),true);

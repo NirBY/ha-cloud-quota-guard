@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.9.0 — 2026-11-14
+
+- Add direct Oracle Cloud API setup using an explicitly supplied OCI signing key.
+  Select reported service/SKU/unit meters independently of any application or
+  external sensor; enter account-specific monthly allowances without guessed limits.
+- Make warning and cutoff percentages configurable per source. The same settings
+  drive notifications, dashboard markers and automatic-action decisions.
+- Add opt-in Oracle compute power-off with explicit instance OCIDs and target
+  confirmation. Validate targets before saving; use only SOFTSTOP with an ETag.
+  Never start, restart or terminate an instance. Keep monitoring and HA integration
+  cutoff separate from Oracle power-off.
+- Preserve unknown usage and delayed-report explanations. Reject manual reports
+  for API-managed metrics; stale or missing data cannot trigger a shutdown.
+- Replace the application-specific Oracle sensor example with a generic example
+  and document OCI credentials, permissions, reporting delay and power-off limits.
+
 ## 0.8.2 — 2026-11-14
 
 - Default the dashboard to English even when Home Assistant's profile language is
