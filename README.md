@@ -229,9 +229,10 @@ or terminates resources. See [Oracle instance power actions](https://docs.oracle
 Oracle usage reports are delayed, so this is not a guaranteed spending cap.
 Stopping compute does not stop storage or other resource charges. Select a
 threshold that leaves headroom for reporting delay. Stale/unknown measurements,
-missing allowances and unconfirmed targets cannot trigger power-off. Other
-providers' cutoff screens disable Home Assistant integrations; Oracle's screen
-explicitly identifies compute power-off.
+missing allowances and unconfirmed targets cannot trigger Oracle power-off.
+Other providers can disable selected Home Assistant integrations or use a
+[supported provider control](docs/usage-and-controls.md#provider-cutoff).
+Each screen identifies the action and requires explicit opt-in.
 
 ### Setup help sensor
 
@@ -430,7 +431,8 @@ details. Both screens support English and Hebrew.
 Choose a name, stable source ID, usage sensor and unit. An optional usage-page URL
 links to the original dashboard; its contents are not fetched. Add a fixed
 allowance or an allowance sensor when available. Without a verified allowance,
-the source displays usage without a percentage or automatic cutoff.
+the source displays usage without a percentage. Configure absolute warning and
+critical amounts through **Configure alerts**; cutoff requires separate opt-in.
 
 The usage sensor must supply a period and a timezone-aware measurement timestamp,
 normally through `period` and `sampled_at` attributes. You can select different
@@ -551,7 +553,7 @@ Non-finite/negative values, invalid limits, missing periods, stale/future timest
   survives restarts and resets on recovery, so forwarding persistent notifications
   to Telegram does not generate a message every minute for the same condition.
 - Event `quota_guard_event` carries `id`, `kind`, `threshold`, `detected_at`, `source_at`, `period` and `message`. Route this event to your preferred notification service with an automation; no personal mobile destination is hardcoded.
-- At the configured cutoff percentage, an enforced metric requests disabling of its mapped Home Assistant config entries, or Oracle SOFTSTOP for its explicitly selected compute instances.
+- At the configured critical threshold, an explicitly enabled control disables mapped Home Assistant integrations or applies a supported provider action. Oracle SOFTSTOP requires a known allowance and explicitly selected compute instances.
 - Cutoff results distinguish `disabled`, `restart_required`, `failed` and `missing`. An unsuccessful unload is not reported as protection.
 - Integrations remain disabled until you manually enable them, even after quota reset.
 - Missing measurements do not trigger speculative disabling of unrelated integrations.

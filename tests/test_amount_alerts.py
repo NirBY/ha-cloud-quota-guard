@@ -1,17 +1,19 @@
 """Amount alerts operate with no quota; cutoff remains independently authorized."""
 
 import unittest
+from datetime import timedelta
 from importlib import import_module
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-from test_guard import RuntimeTests, guard
+import test_guard
+from test_guard import guard
 
 notifications = import_module(guard.__name__ + ".notifications")
 
 
 class AmountAlertTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp = RuntimeTests.asyncSetUp
+    asyncSetUp = test_guard.RuntimeTests.asyncSetUp
 
     async def test_threshold_jump_alerts_once_even_with_no_limit_and_cutoff_off(self):
         metric = self.g.data["metrics"]["test"]
@@ -59,6 +61,48 @@ class AmountAlertTests(unittest.IsolatedAsyncioTestCase):
         metric["sample"]["period"] = "p2"
         await self.g.tick()
         self.assertEqual(self.g.event.await_count, 4)
+
+    async def test_remote_cutoff_needs_fresh_explicit_opt_in_and_stops_after_success(
+        self,
+    ):
+        metric = self.g.data["metrics"]["test"]
+        metric["config"].update(
+            enforce=False,
+            provider_id="provider",
+            threshold_mode="above",
+            warning_value=50,
+            critical_value=75,
+        )
+        metric["sample"].pop("limit")
+        self.g.entry = SimpleNamespace(
+            data={"providers": {"provider": {"type": "openai"}}}
+        )
+        self.g.ai_samples = AsyncMock()
+        executor = self.g.hass.async_add_executor_job = AsyncMock(
+            return_value={"project/key": "revoked"}
+        )
+        control = {"targets": ["project/key"]}
+        self.g.data["remote_controls"] = {"test": control}
+        await self.g.tick()
+        executor.assert_not_awaited()
+        control["enabled"] = True
+        await self.g.tick()
+        executor.assert_not_awaited()
+        metric["config"]["remote_enforce"] = True
+        metric["sample"]["timestamp"] = "2020-01-01T00:00:00+00:00"
+        await self.g.tick()
+        executor.assert_not_awaited()
+        metric["sample"]["timestamp"] = guard.dt_util.utcnow().isoformat()
+        await self.g.tick()
+        executor.assert_awaited_once()
+        self.assertEqual(control["attempts"], 1)
+        self.assertEqual(control["result"], {"project/key": "revoked"})
+        control["checked_at"] = (
+            guard.dt_util.utcnow() - timedelta(hours=1)
+        ).isoformat()
+        metric["sample"]["period"] = "next-period"
+        await self.g.tick()
+        executor.assert_awaited_once()
 
     async def test_notifications_are_off_by_default_and_failures_are_sanitized(self):
         hass = SimpleNamespace(

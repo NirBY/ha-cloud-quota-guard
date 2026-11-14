@@ -17,7 +17,13 @@ def build_archive(destination):
         if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc"
     )
     expected = {p.relative_to(ROOT).as_posix(): p.read_bytes() for p in files}
-    for name in ("README.md", "LICENSE", "CHANGELOG.md", "examples/dashboard.yaml"):
+    for name in (
+        "README.md",
+        "LICENSE",
+        "CHANGELOG.md",
+        "examples/dashboard.yaml",
+        "examples/demo.html",
+    ):
         expected[name] = (ROOT / name).read_bytes()
     for folder in ("docs", "blueprints"):
         for file in (ROOT / folder).rglob("*"):
