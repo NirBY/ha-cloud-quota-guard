@@ -119,6 +119,16 @@
           "description": "Timezone-aware ISO 8601 timestamp of the provider measurement."
         }
       }
+    },
+    "acknowledge_retired": {
+      "name": "Acknowledge retired source",
+      "description": "Remove a stopped source from Action required without deleting its history or changing active monitoring.",
+      "fields": {
+        "id": {
+          "name": "Retired metric ID",
+          "description": "Only a retired source can be acknowledged."
+        }
+      }
     }
   },
   "options": {

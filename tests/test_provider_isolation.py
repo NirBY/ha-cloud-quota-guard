@@ -177,3 +177,32 @@ class IsolationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.g.data["metrics"], {})
         self.assertIn("qg_github_own", self.g.data["retired_metrics"])
         self.assertNotIn("own-secret", json.dumps(self.g.data))
+
+    async def test_acknowledging_archive_never_hides_active_measurement_errors(self):
+        await self.g.apply_provider_row(self.row())
+        with self.assertRaises(guard.vol.Invalid):
+            await self.g.acknowledge_retired(
+                types.SimpleNamespace(data={"id": "qg_github_own"})
+            )
+        self.g.retire_metric("qg_github_own")
+        await self.g.acknowledge_retired(
+            types.SimpleNamespace(data={"id": "qg_github_own"})
+        )
+        retired = self.g.data["retired_metrics"]["qg_github_own"]
+        self.assertTrue(retired["acknowledged"])
+        self.assertEqual(retired["sample"]["used"], 99)
+
+    async def test_invalid_target_blocks_cutoff_for_other_targets_too(self):
+        row = self.row()
+        row["config"].update(enforce=True, entry_ids=["valid", "missing"])
+        row["cutoff_authorized"] = True
+        self.entries.async_get_entry.side_effect = (
+            lambda id: self.target if id == "valid" else None
+        )
+        self.g.data["metrics"][row["config"]["id"]] = row
+        await self.g.evaluate_metrics()
+        self.entries.async_set_disabled_by.assert_not_awaited()
+        self.assertEqual(
+            self.g.snapshot()["metrics"][row["config"]["id"]]["diagnostics"][0]["code"],
+            "target_missing",
+        )

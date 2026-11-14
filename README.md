@@ -163,6 +163,27 @@ restore allowance or make cloud calls succeed. Recovery requires quota renewal
 or additional allowance from IMOU. Alert suppression does not stop IMOU setup
 retries or change its polling settings.
 
+### Diagnose configuration and source problems
+
+The dashboard's **Action required** section remains visible regardless of the
+selected tile filter. Each problem shows its cause, the affected field or entity,
+and a recommended fix. Open details to see timestamp age, allowed age, provider
+HTTP status or a missing cutoff target. **Plugin settings** opens the native
+configuration screen, and sensor details offer **Edit source**.
+
+The diagnostics distinguish an invalid configuration, an unavailable source,
+provider authentication/permissions/rate-limit errors, and integration setup
+failures. A connected service without a quota counter is a coverage gap, not an
+invalid configuration. Monitoring without an allowance or automatic cutoff is
+valid. Never interpret a missing measurement as zero usage.
+
+Old automatic sources retired during the 0.7 upgrade now remain visible with
+their reconnection instructions and saved history. After reconnecting or deciding
+not to replace an old source, **Mark this old source as handled** clears only its
+attention item. The source stays in **Archived sources**; no history is deleted,
+no integration is enabled or disabled, and active source errors cannot be hidden
+this way. The underlying `quota_guard.acknowledge_retired` action is admin-only.
+
 ### Add a sensor source without JSON
 
 Open **Settings → Devices & services → Cloud Quota Guard → Configure → Add sensor

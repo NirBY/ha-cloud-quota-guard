@@ -110,6 +110,8 @@ class GoogleProvider:
                 "provider_note": "Delayed provider measurement; not a billing cap or free character counter",
                 "project": project,
                 "reporting": None,
+                "provider_error_code": None,
+                "provider_http_status": None,
             }
             try:
                 key = (project, service)
@@ -188,5 +190,12 @@ class GoogleProvider:
                 row["provider_error"] = (
                     f"Google quota read failed ({type(exc).__name__})"
                 )
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                row["provider_http_status"] = status
+                row["provider_error_code"] = {
+                    401: "authentication_failed",
+                    403: "permission_denied",
+                    429: "rate_limited",
+                }.get(status, "provider_unavailable")
             results.append(row)
         return results

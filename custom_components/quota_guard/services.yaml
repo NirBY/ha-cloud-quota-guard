@@ -1,3 +1,9 @@
+acknowledge_retired:
+  fields:
+    id:
+      required: true
+      selector:
+        text: {}
 configure:
   fields:
     id:

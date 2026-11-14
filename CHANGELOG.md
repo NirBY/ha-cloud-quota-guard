@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.0 — 2026-11-14
+
+- Show actionable diagnostics for missing sensors/attributes, invalid usage or
+  limits, missing or timezone-less timestamps, stale/future measurements, wrong
+  reporting months, invalid cutoff targets and missing explicit cutoff consent.
+- Show retired GitHub/Google/Tuya sources with reconnection instructions and
+  retained history, instead of silently removing them from the dashboard.
+- Add an administrator-only acknowledgment for retired sources; it cannot hide
+  problems in active sources or delete history.
+- Separate provider authentication, permission and rate-limit errors from general
+  data unavailability. Surface integration setup failures independently of quota coverage.
+- Add English/Hebrew explanations and direct settings links. Block cutoff while
+  an active metric has a configuration error.
+- Use a stable, versioned bootstrap URL so a cached frontend URL continues to
+  resolve after an upgrade/restart. Keep fingerprinted URLs for live card upgrades.
+
 ## 0.7.0 — 2026-11-14
 
 - Resolve the HACS review: no access to other integrations' GitHub tokens or Google

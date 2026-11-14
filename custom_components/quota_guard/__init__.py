@@ -14,6 +14,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.loader import async_get_integration
 from homeassistant.util import dt as dt_util
 
+from .diagnostics import connection_issues, metric_issues, retired_issues
 from .engine import crossings, evaluate
 from .google_provider import GoogleProvider
 from .localization import translate
@@ -67,6 +68,13 @@ async def async_setup(hass, config):
         await getattr(manager, call.service)(call)
 
     async_register_admin_service(hass, DOMAIN, "configure", dispatch, schema=SCHEMA)
+    async_register_admin_service(
+        hass,
+        DOMAIN,
+        "acknowledge_retired",
+        dispatch,
+        schema=vol.Schema({vol.Required("id"): cv.string}),
+    )
     async_register_admin_service(
         hass,
         DOMAIN,
@@ -190,7 +198,17 @@ class Guard:
     def snapshot(self):
         return {
             **self.data,
-            "inventory": self.inventory,
+            "metrics": {
+                id: {**m, "diagnostics": self.metric_diagnostics(m)}
+                for id, m in self.data["metrics"].items()
+            },
+            "retired_metrics": {
+                id: {**m, "diagnostics": retired_issues(m)}
+                for id, m in self.data.get("retired_metrics", {}).items()
+            },
+            "inventory": [
+                {**row, "diagnostics": connection_issues(row)} for row in self.inventory
+            ],
             "relationships": self.relationships,
             "frontend": {
                 key: value
@@ -206,6 +224,25 @@ class Guard:
             else {},
             "updated_at": dt_util.utcnow().isoformat(),
         }
+
+    def metric_diagnostics(self, metric):
+        entries = {}
+        for id in metric["config"].get("entry_ids", []):
+            entry = self.hass.config_entries.async_get_entry(id)
+            if entry:
+                entries[id] = entry.domain
+        return metric_issues(
+            metric, getattr(self.hass, "states", {}), entries, dt_util.utcnow()
+        )
+
+    async def acknowledge_retired(self, call):
+        """Acknowledge a stopped source; retain its history and never hide active errors."""
+        async with self.lock:
+            metric = self.data.get("retired_metrics", {}).get(call.data["id"])
+            if metric is None:
+                raise vol.Invalid("Only retired sources can be acknowledged")
+            metric["acknowledged"] = True
+            await self.store.async_save(self.data)
 
     async def configure(self, call):
         cfg = dict(call.data)
@@ -478,7 +515,15 @@ class Guard:
                             ),
                         )
                 m["last_percent"] = pct
-                if pct >= 95 and cfg.get("enforce") and m.get("cutoff_authorized"):
+                if (
+                    pct >= 95
+                    and cfg.get("enforce")
+                    and m.get("cutoff_authorized")
+                    and not any(
+                        issue["severity"] == "error"
+                        for issue in self.metric_diagnostics(m)
+                    )
+                ):
                     result = {}
                     for eid in cfg["entry_ids"]:
                         e = self.hass.config_entries.async_get_entry(eid)
@@ -571,10 +616,19 @@ class Guard:
                     "timestamp": now.isoformat(),
                 }
                 row["provider_error"] = None
-            except Exception:
+                row["provider_error_code"] = None
+                row["provider_http_status"] = None
+            except Exception as error:
                 row["provider_error"] = (
                     "Provider unavailable; check Quota Guard credentials"
                 )
+                status = getattr(error, "status", None)
+                row["provider_http_status"] = status
+                row["provider_error_code"] = {
+                    401: "authentication_failed",
+                    403: "permission_denied",
+                    429: "rate_limited",
+                }.get(status, "provider_unavailable")
             await self.apply_provider_row(row)
 
     async def google_samples(self):

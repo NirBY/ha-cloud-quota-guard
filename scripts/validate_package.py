@@ -24,7 +24,11 @@ for filename, size in [("icon.png", 256), ("icon@2x.png", 512)]:
         assert icon.mode == "RGBA"
 strings = json.loads((COMPONENT / "strings.json").read_text(encoding="utf-8-sig"))
 services = yaml.safe_load((COMPONENT / "services.yaml").read_text(encoding="utf-8-sig"))
-assert set(services) == set(strings["services"]) == {"configure", "report"}
+assert (
+    set(services)
+    == set(strings["services"])
+    == {"configure", "report", "acknowledge_retired"}
+)
 for service, data in services.items():
     assert set(data["fields"]) == set(strings["services"][service]["fields"])
 for file in COMPONENT.rglob("*.json"):

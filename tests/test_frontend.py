@@ -12,6 +12,7 @@ class FrontendTests(unittest.IsolatedAsyncioTestCase):
     def load_frontend(self):
         frontend = types.ModuleType("homeassistant.components.frontend")
         frontend.add_extra_js_url = Mock()
+        frontend.remove_extra_js_url = Mock()
         http = types.ModuleType("homeassistant.components.http")
         http.StaticPathConfig = lambda *args: args
         path = (
@@ -45,7 +46,8 @@ class FrontendTests(unittest.IsolatedAsyncioTestCase):
         await module.async_register_frontend(hass)
         hass.http.async_register_static_paths.assert_awaited_once()
         first = module.asset_details()
-        frontend.add_extra_js_url.assert_called_once_with(hass, first["url"])
+        frontend.add_extra_js_url.assert_called_once_with(hass, first["bootstrap_url"])
+        self.assertTrue(first["bootstrap_url"].startswith(module.CARD_PATH + "?v="))
         configs = hass.http.async_register_static_paths.call_args.args[0]
         self.assertEqual([c[0] for c in configs], [module.CARD_PATH, first["url"]])
         self.assertTrue(all(Path(c[1]).is_file() and c[2] is False for c in configs))
@@ -53,6 +55,7 @@ class FrontendTests(unittest.IsolatedAsyncioTestCase):
             **first,
             "url": "/quota_guard/012345abcdef/quota-guard-card.js",
             "version": "0.5.2",
+            "bootstrap_url": module.CARD_PATH + "?v=012345abcdef",
         }
         with patch.object(module, "asset_details", return_value=updated):
             await module.async_register_frontend(hass)
@@ -64,7 +67,10 @@ class FrontendTests(unittest.IsolatedAsyncioTestCase):
             len(hass.http.async_register_static_paths.call_args.args[0]), 1
         )
         self.assertEqual(hass.data[module.STATE_KEY]["version"], "0.5.2")
-        frontend.add_extra_js_url.assert_called_with(hass, updated["url"])
+        frontend.add_extra_js_url.assert_called_with(hass, updated["bootstrap_url"])
+        frontend.remove_extra_js_url.assert_called_once_with(
+            hass, first["bootstrap_url"]
+        )
 
     async def test_old_boolean_registration_marker_migrates_without_duplicate_route(
         self,

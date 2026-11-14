@@ -108,3 +108,39 @@ test('refresh keeps a source draft and its focused controls intact',async()=>{
  const card=new Card();card.editorOpen=true;card.editorDraft={name:'Unsaved source'};let renders=0;card.render=()=>renders++;card._hass={callWS:async()=>({metrics:{},inventory:[]})};
  await card.refresh();assert.equal(card.editorDraft.name,'Unsaved source');assert.equal(renders,0);assert.equal(card.loading,false);
 });
+
+test('retired sources stay visible with a remedy, never as current usage',()=>{
+ const card=new Card();card.setConfig({language:'he'});
+ card.data={metrics:{},inventory:[],retired_metrics:{legacy:{config:{id:'legacy',name:'Google'},sample:{used:99,limit:100},status:'ok',percent:99,diagnostics:[{severity:'warning',message:'This legacy source stopped after the credential isolation update.',action:'Connect GitHub or Google in Quota Guard settings using credentials supplied directly to this plugin.'}]}}};
+ const row=card.rows()[0];assert.equal(row.type,'retired');assert.equal(card.needsAttention(row),true);
+ assert.match(card.tile(row),/המקור הישן הופסק/);assert.doesNotMatch(card.tile(row),/99%|99 %/);
+ assert.match(card.detail(row),/סימון המקור הישן כטופל/);assert.match(card.detail(row),/\/config\/integrations\/integration\/quota_guard/);
+});
+
+test('configuration problems remain visible even when a different tile filter is selected',()=>{
+ const card=new Card();card.filter='reference';card.setConfig({language:'he'});
+ card.data={events:[],inventory:[],metrics:{bad:{config:{id:'bad',name:'Bad sensor',entry_ids:[]},diagnostics:[{severity:'error',message:'A configured sensor does not exist.',action:'Select an existing sensor or restore the missing entity.',field:'usage_entity',details:{entity_id:'sensor.missing'}}]}}};
+ card.shadowRoot={innerHTML:'',querySelector(){return {open:false};},querySelectorAll(){return [];}};
+ card.render();assert.match(card.shadowRoot.innerHTML,/Bad sensor/);assert.match(card.shadowRoot.innerHTML,/חיישן שנבחר בהגדרות אינו קיים/);
+ const detail=card.detail(card.rows()[0]);assert.match(detail,/sensor\.missing/);assert.match(detail,/חיישן שימוש/);
+});
+
+test('ordinary quota coverage gaps are not presented as configuration errors',()=>{
+ const card=new Card();card.data={metrics:{},inventory:[{domain:'service',title:'Service',coverage:'needs_setup',state:'loaded'}]};
+ const rows=card.rows();assert.equal(card.needsAttention(rows[0]),false);assert.match(card.diagnosticsPanel(rows),/no detected problems/);assert.doesNotMatch(card.diagnosticsPanel(rows),/Show details and fix/);
+});
+
+test('diagnostic details escape entity names and distinguish future from stale measurements',()=>{
+ const card=new Card();const m={diagnostics:[{severity:'error',message:'The measurement timestamp is in the future.',action:'Correct the source clock or timestamp mapping; do not substitute the current time.',field:'timestamp_attribute',details:{attribute:'<script>alert(1)</script>'}}],sample:{timestamp:'2099-01-01T00:00:00Z'}};
+ assert.match(card.reason(m),/in the future/);const detail=card.diagnosticsDetail(m);assert.doesNotMatch(detail,/<script>/);assert.match(detail,/&lt;script&gt;/);
+});
+
+test('failed local integrations appear in diagnostics independently of cloud coverage',()=>{
+ const card=new Card();card.data={metrics:{},inventory:[{domain:'local_test',title:'Local',coverage:'local',state:'setup_retry',diagnostics:[{severity:'error',message:'Home Assistant reports a problem loading this integration.',action:'Open the integration.'}]}]};
+ assert.equal(card.rows().length,1);assert.equal(card.needsAttention(card.rows()[0]),true);assert.match(card.diagnosticsPanel(card.rows()),/problem loading/);
+});
+
+test('a not-loaded backend gives an actionable message instead of a raw websocket error',async()=>{
+ const card=new Card();card.render=()=>{};card._hass={callWS:async()=>{throw {code:'unknown_command',message:'Unknown command'};}};
+ await card.refresh();assert.match(card.error,/Quota Guard is not loaded/);
+});

@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.frontend import add_extra_js_url, remove_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 
 CARD_PATH = "/quota_guard/quota-guard-card.js"
@@ -22,6 +22,8 @@ def asset_details():
     return {
         "version": version,
         "url": f"/quota_guard/{fingerprint}/quota-guard-card.js",
+        # A cached bootstrap URL must still exist after the next HA restart.
+        "bootstrap_url": f"{CARD_PATH}?v={fingerprint}",
         "path": str(card),
     }
 
@@ -43,5 +45,9 @@ async def async_register_frontend(hass):
             [StaticPathConfig(path, asset["path"], False) for path in needed]
         )
     if not isinstance(state, dict) or state.get("url") != asset["url"]:
-        add_extra_js_url(hass, asset["url"])
+        add_extra_js_url(hass, asset["bootstrap_url"])
+        if isinstance(state, dict):
+            old_url = state.get("bootstrap_url") or state.get("url")
+            if old_url and old_url != asset["bootstrap_url"]:
+                remove_extra_js_url(hass, old_url)
     hass.data[STATE_KEY] = {**asset, "paths": sorted(paths | set(needed))}
