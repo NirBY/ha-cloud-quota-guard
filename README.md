@@ -13,6 +13,117 @@ Cloud Quota Guard is a **custom Home Assistant integration**, distributed throug
 
 English is the default and fallback language. The dashboard follows your Home Assistant profile language, with Hebrew and right-to-left layout supported. Notifications follow the Home Assistant system language. User-defined service names are preserved.
 
+## Setup help
+
+The **? / Help** button in Home Assistant opens this README. Choose the form you
+are filling in: [GitHub](#setup-help-github), [Google](#setup-help-google), or
+[existing sensor](#setup-help-sensor).
+
+Open **Settings → Devices & services → Cloud Quota Guard → Configure**. **Connection
+name** is a label you choose, such as `Personal GitHub` or `Home Google project`;
+it is not a username or password. Enter credentials directly in Home Assistant.
+Do not put tokens or private keys in GitHub issues, chat messages or screenshots.
+
+### Setup help GitHub
+
+This connection reads the authenticated account's **REST core API quota**. It does
+not measure GitHub billing, GraphQL or every individual app's allowance.
+
+1. Sign in to the GitHub account whose quota you want to monitor. Open **Settings
+   → Developer settings → Personal access tokens → Fine-grained tokens → Generate
+   new token**. Choose a descriptive name and expiration. Keep permissions minimal:
+   the rate-limit endpoint requires no additional permissions, including private
+   repository access. See [GitHub's token instructions](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
+   and [rate-limit endpoint permissions](https://docs.github.com/en/rest/rate-limit/rate-limit).
+2. In Quota Guard, choose **Connect GitHub** and fill in:
+
+   | Field | What to enter |
+   | --- | --- |
+   | Connection name | A label, for example `Personal GitHub`. |
+   | GitHub token | The complete token value you generated, without quotes or a `Bearer ` prefix. This is not your GitHub password. |
+
+3. Click **Submit**. The token is checked with GitHub before it is saved. An invalid
+   token leaves the form open with an error.
+4. The integration page shows a **GitHub — your label** service device and a
+   **Connection** sensor. It starts as **Pending first check**, then becomes
+   **Connected** after polling succeeds. Within a minute, its usage entity and
+   dashboard tile show usage, allowance, remaining calls and reset information.
+
+If an older GitHub source still says it needs reconnection, first verify that the
+new source measures the intended account. Then open the old source and select
+**Mark this old source as handled**. Its history is retained separately.
+
+### Setup help Google
+
+Use a **Google Cloud service-account JSON key** for the project being measured.
+An OAuth client-secret file, API key, Google password or just the private-key
+string will not work. The JSON's `project_id` selects the project; add a separate
+connection if your APIs use different projects.
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), select the project
+   used by your Home Assistant API integrations. Enable **Service Usage API** and
+   **Cloud Monitoring API** under **APIs & Services → Library**. Select only APIs
+   that are actually used and enabled in that project.
+2. Under **IAM & Admin → Service Accounts**, create or select a service account
+   for Quota Guard. It needs `serviceusage.quotas.get` and
+   `monitoring.timeSeries.list` on that project. Google's read-only **Service Usage
+   Viewer** role (`roles/serviceusage.serviceUsageViewer`) includes both; a custom
+   role containing these permissions is also suitable. Owner/Editor is not needed.
+   See [Google's role permissions](https://docs.cloud.google.com/iam/docs/roles-permissions/serviceusage#serviceusage.serviceUsageViewer).
+3. Open that account's **Keys → Add key → Create new key → JSON** and keep the
+   downloaded file private. If your organization blocks JSON keys, consult your
+   administrator instead of weakening its policy. See [Google's key instructions](https://docs.cloud.google.com/iam/docs/keys-create-delete).
+4. In Quota Guard choose **Connect Google project** and fill in:
+
+   | Field | What to enter |
+   | --- | --- |
+   | Connection name | A label, for example `Home Google project`. |
+   | Service-account JSON key | The complete JSON object from the downloaded file, on one line. Preserve the escaped `\n` inside `private_key`; do not paste a file path. |
+   | Project APIs | Select **Google Assistant SDK**, **Google Cloud Text-to-Speech**, and/or **Google Calendar**, only for the APIs used in this project. |
+
+   On Windows, this local PowerShell command copies compact JSON to your clipboard
+   without uploading it or printing the key. Replace the file path with yours:
+
+   ```powershell
+   Get-Content -LiteralPath '.\quota-guard-key.json' -Raw |
+     ConvertFrom-Json | ConvertTo-Json -Depth 20 -Compress | Set-Clipboard
+   ```
+
+5. Click **Submit**. JSON/key validation happens immediately; permission and API
+   access checks happen on the first poll. Open the new **Google — your label**
+   device to see connection status and one usage entity per selected API.
+
+| Selected API | Measurement |
+| --- | --- |
+| Google Assistant SDK | Reported conversation requests in the provider day. |
+| Google Cloud Text-to-Speech | Highest reported request-minute today, not free voice characters. |
+| Google Calendar | Highest reported project request-minute today, not a per-user allowance. |
+
+A successful check with no usage samples keeps the connection **Connected** but
+leaves the usage entity unavailable; the dashboard explains the delayed report.
+It does not invent a zero-use measurement. A 403 error usually requires checking
+the project, enabled APIs and read permissions. Follow the error shown in details.
+
+### Setup help sensor
+
+Choose **Add sensor source**, or **Add source** on the quota dashboard. Select an
+existing usage sensor, its unit and an optional verified allowance. Set the actual
+source timestamp and reporting period. A web page URL alone is not a data source.
+
+For Security Scanner, use `sensor.security_scanner_free_usage`, unit `%`, fixed
+allowance `100`, timestamp attribute `checked_at`, **Calendar month**, timezone
+`UTC`, and maximum age `900` seconds. This is the scanner's conservative estimate.
+Leave **Usage page URL** blank if its old standalone dashboard has been removed.
+The source appears as its own device and usage entity after saving.
+
+### After saving
+
+Saved providers are visible under the existing Quota Guard integration entry;
+they do not create a second installation of the integration. Click its device or
+entity count to inspect the connections. The quota dashboard remains the place
+for charts, thresholds and archived sources. Monitoring is enabled by saving;
+automatic cutoff requires a separate explicit configuration.
+
 ## Features
 
 - Service tiles with utilization, allowance, remaining capacity and measurement freshness.
@@ -121,15 +232,9 @@ imported from another integration. Restart is not required; polling starts withi
 one minute. **Remove provider connection** removes credentials and stops polling;
 remove and add a connection to replace its credentials.
 
-For GitHub, enter a token for the account whose REST core quota you want to monitor.
-The rate-limit endpoint needs no repository permissions. A different account's
-token cannot measure the quota used by your integration. GitHub validates the token
-before it is saved.
-
-For Google, paste a service-account JSON key as one line and select the supported
-APIs in that project. Keys are checked locally; read access is checked on the first
-poll. Grant `serviceusage.quotas.get` and `monitoring.timeSeries.list` using suitable
-read-only roles and enable the corresponding APIs. API errors appear on the metric.
+See the field-by-field [GitHub setup guide](#setup-help-github) and
+[Google setup guide](#setup-help-google) for credentials, read permissions,
+examples and what to expect after saving.
 
 Use **Configure → Configure cutoff targets** to select a measured quota, explicitly
 map its target integrations, and opt in to disabling at 95%. This screen calls the
@@ -212,8 +317,9 @@ measurements. Existing provider-side shutdown controls remain independent.
 
 For the Security Scanner example, select `sensor.security_scanner_free_usage`,
 unit `%`, allowance `100`, timestamp attribute `checked_at`, and your verified
-monthly reset timezone. Link `/security-scanner/usage` and name the source
-**Oracle free-tier safety estimate**: this is a conservative estimate with a
+monthly reset timezone. An optional usage-page link must point to an existing
+page; omit it if the old view was removed. Name the source
+**Security Scanner — Oracle free-tier safety estimate**: this is a conservative estimate with a
 reporting reserve, not a provider billing counter. Leave Quota Guard cutoff off;
 the scanner has its own shutdown policy. See [example configuration](examples/security-scanner.yaml).
 

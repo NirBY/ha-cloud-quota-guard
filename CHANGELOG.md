@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.1 — 2026-11-14
+
+- Show saved GitHub/Google connections as service devices with a connection-status
+  entity, including a pending state before the first poll.
+- Add a named usage entity for each active source, including manual sensor sources.
+  Keep stale, missing and delayed measurements unavailable instead of reporting zero.
+- Discover sources dynamically and remove only Quota Guard's obsolete entities
+  when a provider is removed; retain archived quota history.
+- Open the README setup guide from Home Assistant's help button. Explain credential
+  creation, exact form fields, Google read permissions and post-save verification.
+- Add English/Hebrew field help and direct provider-specific README links.
+
 ## 0.8.0 — 2026-11-14
 
 - Show actionable diagnostics for missing sensors/attributes, invalid usage or

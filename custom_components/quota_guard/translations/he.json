@@ -152,7 +152,7 @@
       },
       "source": {
         "title": "מקור מכסה מחיישן",
-        "description": "בחירת חיישן שימוש, מגבלה ומקור לזמן המדידה. קישור לדף שימוש הוא לעיון בלבד. כיבוי אוטומטי כבוי כברירת מחדל.",
+        "description": "בחירת חיישן שימוש, מגבלה ומקור לזמן המדידה. קישור לדף שימוש הוא לעיון בלבד. כיבוי אוטומטי כבוי כברירת מחדל.\n\n[מדריך הגדרה: מה להזין ואיך לקבל פרטי גישה](https://github.com/NirBY/ha-cloud-quota-guard/blob/main/README.md#setup-help-sensor).",
         "data": {
           "id": "מזהה מדד",
           "name": "שם",
@@ -196,19 +196,28 @@
       },
       "github": {
         "title": "חיבור GitHub ל־Quota Guard",
-        "description": "יש להזין אסימון עבור Quota Guard. האסימון נבדק מול GitHub ומכסת REST core שלו מנוטרת. אין צורך בהרשאות למאגרים עבור בדיקת המכסה. לא נקראים אסימונים של אינטגרציות אחרות ולא מופעל ניתוק אוטומטי.",
+        "description": "יש להזין אסימון עבור Quota Guard. האסימון נבדק מול GitHub ומכסת REST core שלו מנוטרת. אין צורך בהרשאות למאגרים עבור בדיקת המכסה. לא נקראים אסימונים של אינטגרציות אחרות ולא מופעל ניתוק אוטומטי.\n\n[מדריך הגדרה: מה להזין ואיך לקבל פרטי גישה](https://github.com/NirBY/ha-cloud-quota-guard/blob/main/README.md#setup-help-github).",
         "data": {
           "name": "שם החיבור",
           "access_token": "אסימון GitHub"
+        },
+        "data_description": {
+          "name": "שם לתצוגה לבחירתכם, למשל GitHub אישי. אין צורך בשם משתמש או כתובת דוא״ל.",
+          "access_token": "הטוקן המלא של חשבון GitHub שברצונכם למדוד, ללא מרכאות או קידומת Bearer. אין להזין סיסמה."
         }
       },
       "google": {
         "title": "חיבור פרויקט Google ל־Quota Guard",
-        "description": "יש להדביק את מפתח חשבון השירות בפורמט JSON בשורה אחת ולבחור ממשקי API לניטור. המפתח נבדק מקומית; הרשאות הגישה נבדקות בעת הדגימה. יש להפעיל Service Usage ו־Cloud Monitoring ולהעניק הרשאות קריאה. לא נקראים פרטי גישה של אינטגרציות אחרות. הניתוק האוטומטי נשאר כבוי.",
+        "description": "יש להדביק את מפתח חשבון השירות בפורמט JSON בשורה אחת ולבחור ממשקי API לניטור. המפתח נבדק מקומית; הרשאות הגישה נבדקות בעת הדגימה. יש להפעיל Service Usage ו־Cloud Monitoring ולהעניק הרשאות קריאה. לא נקראים פרטי גישה של אינטגרציות אחרות. הניתוק האוטומטי נשאר כבוי.\n\n[מדריך הגדרה: מה להזין ואיך לקבל פרטי גישה](https://github.com/NirBY/ha-cloud-quota-guard/blob/main/README.md#setup-help-google).",
         "data": {
           "name": "שם החיבור",
           "service_account_info": "מפתח חשבון שירות בפורמט JSON",
           "services": "ממשקי API בפרויקט"
+        },
+        "data_description": {
+          "name": "שם לתצוגה, למשל פרויקט Google הביתי.",
+          "service_account_info": "כל תוכן קובץ ה-JSON של חשבון השירות, בשורה אחת. אין להזין נתיב לקובץ, מפתח API או קובץ OAuth.",
+          "services": "בחרו רק שירותים שפועלים בפרויקט שמופיע בשדה project_id שבמפתח."
         }
       },
       "remove_provider": {
@@ -267,6 +276,19 @@
         "google": "Google Calendar",
         "google_cloud": "Google Cloud Text-to-Speech",
         "google_assistant_sdk": "Google Assistant SDK"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "connection": {
+        "name": "מצב החיבור",
+        "state": {
+          "pending": "ממתין לבדיקה ראשונה",
+          "connected": "מחובר",
+          "needs_attention": "נדרש טיפול",
+          "removed": "הוסר"
+        }
       }
     }
   }

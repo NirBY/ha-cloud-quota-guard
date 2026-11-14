@@ -135,6 +135,11 @@ class OptionsFlow(config_entries.OptionsFlow):
         self.hass.config_entries.async_update_entry(
             entry, data={**entry.data, "providers": providers}
         )
+        # Publish the saved connection before the next provider poll. Its status
+        # stays pending until a real response arrives.
+        manager = self.hass.data["quota_guard"]
+        for listener in tuple(manager.listeners):
+            listener()
         return self.async_create_entry(title="", data={})
 
     async def async_step_remove_provider(self, user_input=None):

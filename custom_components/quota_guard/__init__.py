@@ -194,6 +194,8 @@ class Guard:
                 if metric["config"].get("provider_id") == provider_id:
                     self.retire_metric(id)
             await self.store.async_save(self.data)
+            for listener in tuple(self.listeners):
+                listener()
 
     def snapshot(self):
         return {

@@ -10,12 +10,12 @@
     "http",
     "persistent_notification"
   ],
-  "documentation": "https://github.com/NirBY/ha-cloud-quota-guard",
+  "documentation": "https://github.com/NirBY/ha-cloud-quota-guard/blob/main/README.md#setup-help",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/NirBY/ha-cloud-quota-guard/issues",
   "requirements": [
     "google-auth[requests]==2.62.0"
   ],
-  "version": "0.8.0"
+  "version": "0.8.1"
 }

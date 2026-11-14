@@ -152,7 +152,7 @@
       },
       "source": {
         "title": "Sensor quota source",
-        "description": "Choose a usage sensor, optional allowance and measurement timestamp. A usage-page URL is a reference link. Automatic cutoff is off by default.",
+        "description": "Choose a usage sensor, optional allowance and measurement timestamp. A usage-page URL is a reference link. Automatic cutoff is off by default.\n\n[Setup guide: what to enter and how to get credentials](https://github.com/NirBY/ha-cloud-quota-guard/blob/main/README.md#setup-help-sensor).",
         "data": {
           "id": "Metric ID",
           "name": "Name",
@@ -196,19 +196,28 @@
       },
       "github": {
         "title": "Connect GitHub to Quota Guard",
-        "description": "Enter a token explicitly for Quota Guard. We validate it with GitHub and monitor its REST core quota. No repository permissions are needed for the rate-limit endpoint. This does not read another integration’s token or enable cutoff.",
+        "description": "Enter a token explicitly for Quota Guard. We validate it with GitHub and monitor its REST core quota. No repository permissions are needed for the rate-limit endpoint. This does not read another integration’s token or enable cutoff.\n\n[Setup guide: what to enter and how to get credentials](https://github.com/NirBY/ha-cloud-quota-guard/blob/main/README.md#setup-help-github).",
         "data": {
           "name": "Connection name",
           "access_token": "GitHub token"
+        },
+        "data_description": {
+          "name": "A display label you choose, for example Personal GitHub. This is not a login field.",
+          "access_token": "The complete token for the GitHub account to monitor, without quotes or a Bearer prefix. Do not enter your password."
         }
       },
       "google": {
         "title": "Connect a Google project to Quota Guard",
-        "description": "Paste the service-account JSON key as one line and choose the project APIs to monitor. The key is checked locally; provider access is checked during polling. Enable Service Usage and Cloud Monitoring and grant their read permissions in Google Cloud. No other integration’s credentials are read. Cutoff stays off.",
+        "description": "Paste the service-account JSON key as one line and choose the project APIs to monitor. The key is checked locally; provider access is checked during polling. Enable Service Usage and Cloud Monitoring and grant their read permissions in Google Cloud. No other integration’s credentials are read. Cutoff stays off.\n\n[Setup guide: what to enter and how to get credentials](https://github.com/NirBY/ha-cloud-quota-guard/blob/main/README.md#setup-help-google).",
         "data": {
           "name": "Connection name",
           "service_account_info": "Service-account JSON key",
           "services": "Project APIs"
+        },
+        "data_description": {
+          "name": "A display label, for example Home Google project.",
+          "service_account_info": "The complete service-account JSON file contents on one line. Not a file path, API key or OAuth client-secret file.",
+          "services": "Select only APIs used in the project identified by project_id in the key."
         }
       },
       "remove_provider": {
@@ -267,6 +276,19 @@
         "google": "Google Calendar",
         "google_cloud": "Google Cloud Text-to-Speech",
         "google_assistant_sdk": "Google Assistant SDK"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "connection": {
+        "name": "Connection",
+        "state": {
+          "pending": "Pending first check",
+          "connected": "Connected",
+          "needs_attention": "Needs attention",
+          "removed": "Removed"
+        }
       }
     }
   }

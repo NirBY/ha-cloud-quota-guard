@@ -3,9 +3,8 @@
 action: quota_guard.configure
 data:
   id: security_scanner_estimate
-  name: Oracle free-tier safety estimate
+  name: Security Scanner — Oracle free-tier safety estimate
   source: Security Scanner monthly estimate with reporting reserve
-  usage_url: /security-scanner/usage
   usage_entity: sensor.security_scanner_free_usage
   kind: free_allowance
   unit: "%"

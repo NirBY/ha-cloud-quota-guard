@@ -13,7 +13,9 @@ hacs = json.loads((ROOT / "hacs.json").read_text(encoding="utf-8-sig"))
 assert manifest["domain"] == "quota_guard"
 assert manifest["name"] == hacs["name"] == "Cloud Quota Guard"
 assert manifest["codeowners"] == ["@NirBY"]
-assert manifest["documentation"] == "https://github.com/NirBY/ha-cloud-quota-guard"
+assert manifest["documentation"] == (
+    "https://github.com/NirBY/ha-cloud-quota-guard/blob/main/README.md#setup-help"
+)
 assert manifest["issue_tracker"].endswith("/ha-cloud-quota-guard/issues")
 assert len(list((ROOT / "custom_components").iterdir())) == 1
 assert (COMPONENT / "frontend/quota-guard-card.js").is_file()
