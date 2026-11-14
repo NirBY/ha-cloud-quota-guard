@@ -5,7 +5,7 @@ import sys
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from test_guard import guard
 
@@ -33,9 +33,10 @@ def load_flow():
     core = types.ModuleType("homeassistant.core")
     core.callback = lambda function: function
     selectors = types.ModuleType("homeassistant.helpers.selector")
-    for name in ("Entity", "Select", "Number"):
+    for name in ("Entity", "Select", "Number", "Text"):
         setattr(selectors, name + "SelectorConfig", lambda **kwargs: kwargs)
         setattr(selectors, name + "Selector", lambda config: lambda value: value)
+    selectors.TextSelectorType = types.SimpleNamespace(PASSWORD="password")
     spec = importlib.util.spec_from_file_location(
         "quota_guard.config_flow", Path(guard.__file__).parent / "config_flow.py"
     )
@@ -119,3 +120,70 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             await self.flow.async_step_init(), {"type": "abort", "reason": "not_loaded"}
         )
+
+    async def test_github_validation_saves_only_own_entry_and_failure_never_saves(self):
+        self.flow.config_entry = types.SimpleNamespace(data={"existing": "preserved"})
+        update = self.flow.hass.config_entries.async_update_entry = Mock()
+        response = Mock()
+        request = AsyncMock()
+        request.__aenter__.return_value = response
+        session = Mock()
+        session.get.return_value = request
+        with patch(
+            "homeassistant.helpers.aiohttp_client.async_get_clientsession",
+            return_value=session,
+        ):
+            result = await self.flow.async_step_github(
+                {"name": "Own", "access_token": "own-secret"}
+            )
+            self.assertEqual(result["type"], "create_entry")
+            self.assertIs(update.call_args.args[0], self.flow.config_entry)
+            self.assertEqual(update.call_args.kwargs["data"]["existing"], "preserved")
+            provider = next(iter(update.call_args.kwargs["data"]["providers"].values()))
+            self.assertEqual(provider["access_token"], "own-secret")
+            update.reset_mock()
+            response.raise_for_status.side_effect = ValueError("own-secret")
+            result = await self.flow.async_step_github(
+                {"name": "Own", "access_token": "own-secret"}
+            )
+            self.assertEqual(result["errors"], {"base": "cannot_connect"})
+            self.assertNotIn("own-secret", str(result))
+            update.assert_not_called()
+
+    async def test_google_services_and_credentials_are_explicit_and_private(self):
+        self.flow.config_entry = types.SimpleNamespace(data={})
+        update = self.flow.hass.config_entries.async_update_entry = Mock()
+        executor = self.flow.hass.async_add_executor_job = AsyncMock(
+            return_value={"private_key": "own-secret"}
+        )
+        result = await self.flow.async_step_google(
+            {"name": "Own", "service_account_info": "own-json", "services": ["google"]}
+        )
+        self.assertEqual(result["type"], "create_entry")
+        self.assertEqual(executor.call_args.args[1], "own-json")
+        provider = next(iter(update.call_args.kwargs["data"]["providers"].values()))
+        self.assertEqual(provider["services"], ["google"])
+        update.reset_mock()
+        executor.side_effect = ValueError("own-secret")
+        result = await self.flow.async_step_google(
+            {"name": "Own", "service_account_info": "own-json", "services": ["google"]}
+        )
+        self.assertEqual(result["errors"], {"base": "invalid_credentials"})
+        self.assertNotIn("own-secret", str(result))
+        update.assert_not_called()
+
+    async def test_cutoff_screen_uses_administrator_configure_handler(self):
+        self.manager.data["metrics"]["example"] = {
+            "config": guard.SCHEMA(
+                {**self.input, "entry_ids": [], "source": "sensor.usage"}
+            )
+        }
+        result = await self.flow.async_step_mapping({"source_id": "example"})
+        self.assertFalse(result["data_schema"]({})["enforce"])
+        result = await self.flow.async_step_cutoff(
+            {"enforce": True, "entry_ids": ["chosen"]}
+        )
+        self.assertEqual(result["type"], "create_entry")
+        cfg = self.manager.configure.call_args.args[0].data
+        self.assertTrue(cfg["enforce"])
+        self.assertEqual(cfg["entry_ids"], ["chosen"])

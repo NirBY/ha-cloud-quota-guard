@@ -284,5 +284,6 @@
   "Use an HTTP(S) URL or a local dashboard path.": "יש להזין קישור HTTP(S) או נתיב ללוח בקרה מקומי.",
   "The allowance must be a positive number.": "המכסה חייבת להיות מספר חיובי.",
   "This source ID already exists. Edit that source or choose a different ID.": "מזהה המקור כבר קיים. יש לערוך את המקור הקיים או לבחור מזהה אחר.",
-  "Usage sensor state by default": "מצב חיישן השימוש כברירת מחדל"
+  "Usage sensor state by default": "מצב חיישן השימוש כברירת מחדל",
+  "Quota Guard updated: add your own GitHub/Google credentials in Configure. The Tuya observer was removed. History is retained; all legacy cutoffs are off until you explicitly map targets and enable cutoff again. Already disabled integrations remain disabled.": "Quota Guard עודכן: יש להוסיף פרטי גישה משלכם ל־GitHub ול־Google דרך הגדרות. מנגנון ספירת הבקשות של Tuya הוסר. ההיסטוריה נשמרת; כל הניתוקים הישנים כבויים עד לבחירת יעדים והפעלה מפורשת מחדש. אינטגרציות שכבר הושבתו נשארות מושבתות."
 }

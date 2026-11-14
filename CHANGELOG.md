@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0 — 2026-11-14
+
+- Resolve the HACS review: no access to other integrations' GitHub tokens or Google
+  service accounts. Optional connections now use Quota Guard's own credential forms.
+- Remove the Tuya SDK HTTP observer and all runtime client patching.
+- Default every source and the configure action to monitor-only. Only an explicit
+  administrator mapping with cutoff enabled can disable an integration. Provider
+  polls preserve that choice and cannot infer targets or enable enforcement.
+- Migrate legacy automatic metrics to retained history and reset old cutoff flags
+  before the first evaluation. Keep sensor sources, history and events; never
+  automatically re-enable integrations that were previously disabled.
+- Add English/Hebrew provider connection, removal and cutoff mapping screens.
+
 ## 0.6.0
 
 - Save configuration and evaluate submitted/sensor measurements without waiting for slow cloud polls; skip overlapping polls.

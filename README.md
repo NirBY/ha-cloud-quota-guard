@@ -17,7 +17,7 @@ English is the default and fallback language. The dashboard follows your Home As
 
 - Service tiles with utilization, allowance, remaining capacity and measurement freshness.
 - Usage-only measurements and raw-unit charts when the limit is unknown.
-- Passive Tuya HTTP request counts, explicitly scoped to this Home Assistant instance.
+- Optional GitHub/Google connections with credentials supplied directly to Quota Guard.
 - Links to mapped cutoff integrations and directly related automations.
 - Click a tile for provider details, reset period and recorded usage history.
 - Graph ranges: one hour, 24 hours, seven days, or all retained observations.
@@ -96,21 +96,57 @@ If your frontend blocks automatic modules, manually add the resource `/quota_gua
 
 | Source | What is measured | Requirements / limitations |
 | --- | --- | --- |
-| GitHub | REST **core** request rate limit | Uses the token of an existing GitHub config entry in memory. Excludes GraphQL, search, HACS and billing allowances. |
-| Google Assistant SDK | Project daily conversation request usage | Existing Google Cloud service account, Service Usage and Cloud Monitoring read permissions, supported project association. |
+| GitHub | REST **core** request rate limit | User-supplied Quota Guard token; no other integration’s credentials are read. Excludes GraphQL, search, HACS and billing allowances. |
+| Google Assistant SDK | Project daily conversation request usage | User-supplied Quota Guard service account, Service Usage and Cloud Monitoring read permissions, explicit API selection. |
 | Google Cloud TTS | Highest reported project request-minute in the provider day | API quota, **not** free/billable voice characters. |
 | Google Calendar | Highest reported project request-minute in the provider day | Project quota, not per-user quota. |
-| Tuya Sharing SDK | HTTP attempts observed locally, including failures and token refreshes | Observation starts when the monitor attaches. Excludes MQTT, startup, monitoring gaps and other apps. No verified account limit or automatic cutoff. |
+| Tuya | Reference policy only; no built-in measurement | Connect a verified sensor or administrator report if available. Quota Guard does not patch the Tuya SDK. |
 | Generic sensor | Your verified current-period usage and limit | A source-provided period identifier and timezone-aware timestamp are required. |
 | Administrator report action | Measurements from another trusted adapter | Configure the metric first. No public/unauthenticated webhook is exposed. |
 
-Built-in GitHub/Google measurements are discovered automatically after setup, with enforcement enabled for their mapped integrations. Generic metrics can set `enforce: false` for monitoring only. This release uses fixed 90% warning and 95% cutoff thresholds.
+All sources default to monitor-only (`enforce: false`). GitHub/Google connections are opt-in, with no inferred target integrations. Only an explicit administrator configuration can authorize cutoff for selected targets. This release uses fixed 90% warning and 95% cutoff thresholds.
 
-Google quotas are read from the provider's effective limits, rather than assumed free-tier values. Quota limits are cached for one hour. Usage is polled every minute; Google's reporting is delayed and the daily window follows **America/Los_Angeles**. A successful current-day query with no samples displays **0 requests reported**, with a check time and period. This is a reporting observation, not a verified zero-use quota sample: no percentage, remaining balance, cutoff or zero graph point is derived from it. An expired or failed query still raises a loss-of-measurement alert. The adapter does not enable Google APIs or grant permissions for you. Project association currently supports legacy `api-project-N` service accounts whose project number appears in the existing OAuth client ID; unmatched entries are not monitored.
+Google quotas are read from the provider's effective limits, rather than assumed free-tier values. Quota limits are cached for one hour. Usage is polled every minute; Google's reporting is delayed and the daily window follows **America/Los_Angeles**. A successful current-day query with no samples displays **0 requests reported**, with a check time and period. This is a reporting observation, not a verified zero-use quota sample: no percentage, remaining balance, cutoff or zero graph point is derived from it. An expired or failed query still raises a loss-of-measurement alert. The adapter does not enable Google APIs or grant permissions for you. The project comes from the service account supplied to Quota Guard. Select the APIs to monitor explicitly; no OAuth/config-entry matching is performed.
 
 Google Translate TTS uses an unofficial speech service, separate from Google Cloud TTS. An unavailable quota source does not mean its integration is disconnected.
 
 IMOU, OpenAI billing/credits and other unconnected providers are shown as needing a source when discovered. They do **not** have automatic quota protection just because their integration appears in the inventory. Provider email reminders are separate from this integration.
+
+### Connect GitHub or Google explicitly
+
+Open **Configure → Connect GitHub** or **Connect Google project**. These credentials
+are stored only in Quota Guard's own Home Assistant config entry. They are not
+included in the dashboard report, metric storage or events. No credentials are
+imported from another integration. Restart is not required; polling starts within
+one minute. **Remove provider connection** removes credentials and stops polling;
+remove and add a connection to replace its credentials.
+
+For GitHub, enter a token for the account whose REST core quota you want to monitor.
+The rate-limit endpoint needs no repository permissions. A different account's
+token cannot measure the quota used by your integration. GitHub validates the token
+before it is saved.
+
+For Google, paste a service-account JSON key as one line and select the supported
+APIs in that project. Keys are checked locally; read access is checked on the first
+poll. Grant `serviceusage.quotas.get` and `monitoring.timeSeries.list` using suitable
+read-only roles and enable the corresponding APIs. API errors appear on the metric.
+
+Use **Configure → Configure cutoff targets** to select a measured quota, explicitly
+map its target integrations, and opt in to disabling at 95%. This screen calls the
+same administrator configuration handler as `quota_guard.configure`. Automatic
+polls cannot add targets or turn cutoff on. A monitoring connection never implies
+permission to disable another integration.
+
+### Upgrade from 0.6.x or earlier
+
+Legacy automatic GitHub/Google/Tuya metrics move to `retired_metrics` in the existing
+`.storage/quota_guard` data, retaining their history but stopping evaluation.
+New GitHub/Google connections require credentials supplied through Quota Guard's
+own Configure screen. All pre-upgrade cutoff settings are reset to monitor-only,
+including old manual configurations whose defaults did not establish explicit
+consent. Re-select targets and enable cutoff if desired. Sensor sources, their
+history and saved events remain intact. Already disabled integrations are never
+automatically re-enabled. Home Assistant displays a one-time migration notice.
 
 ### IMOU monthly calls
 
@@ -168,14 +204,9 @@ A source timestamp and provider period are still required. Raw usage and its
 history are shown; no percentage, remaining balance or quota cutoff is inferred.
 If a fixed verified limit was configured, reports without a limit use that value.
 
-Official Tuya Sharing SDK sessions are observed automatically. Counts are local
-HTTP attempts, not provider billing, account-wide usage or MQTT message counts.
-Zero means no requests were observed since attachment, not zero account usage.
-Daily counts reset at midnight UTC and persist on the monitor's regular save;
-requests during startup and monitoring gaps cannot be reconstructed. The observer
-passes requests/responses through unchanged, stores no URLs/headers/payloads, makes
-no extra requests, and detaches on unload. Unsupported SDK sessions remain without
-a measured source rather than displaying an invented zero.
+The former Tuya SDK observer has been removed. Quota Guard never wraps another
+integration’s HTTP client. Tuya remains in the inventory with reference policies;
+connect a verified sensor or report source to measure usage.
 
 ### Cutoff targets and automation dependencies
 
@@ -238,7 +269,7 @@ sampled_at: "2026-10-31T10:00:00+00:00"
 
 Use `limit_entity` instead of `limit` when a sensor exposes the effective allowance. Do not supply a lifetime total as current-period usage. A config entry ID is different from an entity ID; the dashboard inventory is read from Home Assistant's config entries. Configure one metric for each independent limit. Multiple metrics can share a target integration.
 
-The dashboard's administrator section accepts the same fields as JSON. Configuring an existing metric replaces its configuration.
+The dashboard’s administrator section accepts the same fields as JSON. Configuring an existing manual metric replaces its configuration. Provider measurement fields cannot be overwritten; only cutoff mappings can be changed. Omitting `enforce` leaves cutoff off.
 
 ### Report from another adapter
 

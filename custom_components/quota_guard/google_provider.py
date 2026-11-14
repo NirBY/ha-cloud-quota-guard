@@ -1,11 +1,10 @@
 """Google consumer quota limits + Cloud Monitoring DELTA observations.
 
-Reads existing Google Cloud credentials in memory. No invented free-tier limits.
+Uses service accounts explicitly supplied to Quota Guard. No invented free-tier limits.
 Minute metrics are explicitly the highest observed minute of the provider day,
 not live rate: Google publishes observations with delay.
 """
 
-import json
 import math
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
@@ -58,10 +57,9 @@ def aggregate(series, metric, mode):
 
 class GoogleProvider:
     def __init__(self):
-        self.sessions = {}
         self.limits = {}
 
-    def fetch(self, accounts, entries):
+    def fetch(self, accounts):
         from google.auth.transport.requests import AuthorizedSession
         from google.oauth2 import service_account
 
@@ -71,131 +69,124 @@ class GoogleProvider:
         )
         results = []
         for account in accounts:
-            info = account["info"]
-            info = json.loads(info) if isinstance(info, str) else info
+            info = account["service_account_info"]
             project = info["project_id"]
-            if account["id"] not in self.sessions:
-                cred = service_account.Credentials.from_service_account_info(
-                    info,
-                    scopes=[
-                        "https://www.googleapis.com/auth/cloud-platform.read-only",
-                        "https://www.googleapis.com/auth/monitoring.read",
-                    ],
+            # Each poll owns and closes its client. Removed/replaced credentials
+            # cannot remain cached in a client borrowed from another integration.
+            cred = service_account.Credentials.from_service_account_info(
+                info,
+                scopes=[
+                    "https://www.googleapis.com/auth/cloud-platform.read-only",
+                    "https://www.googleapis.com/auth/monitoring.read",
+                ],
+            )
+            with AuthorizedSession(cred) as session:
+                results.extend(
+                    self.fetch_account(account, session, now, midnight, project)
                 )
-                self.sessions[account["id"]] = AuthorizedSession(cred)
-            session = self.sessions[account["id"]]
-            for domain, (service, metric, name, mode) in SERVICES.items():
-                target = [
-                    e["entry_id"]
-                    for e in entries
-                    if e["domain"] == domain
-                    and (
-                        domain == "google_cloud"
-                        and e["entry_id"] == account["id"]
-                        or domain != "google_cloud"
-                        and e.get("project") == project
+        return results
+
+    def fetch_account(self, account, session, now, midnight, project):
+        results = []
+        for domain in account["services"]:
+            service, metric, name, mode = SERVICES[domain]
+            id = "qg_google_" + account["id"] + "_" + domain
+            cfg = {
+                "id": id,
+                "name": name,
+                "builtin_name": True,
+                "entry_ids": [],
+                "provider_id": account["id"],
+                "kind": "rate_limit",
+                "source": "Google Service Usage + Cloud Monitoring",
+                "unit": "requests per day"
+                if mode == "day"
+                else "requests per minute (reported daily peak)",
+                "max_age": 600,
+                "enforce": False,
+            }
+            row = {
+                "config": cfg,
+                "provider_note": "Delayed provider measurement; not a billing cap or free character counter",
+                "project": project,
+                "reporting": None,
+            }
+            try:
+                key = (project, service)
+                if (
+                    key not in self.limits
+                    or (now - self.limits[key][0]).total_seconds() > 3600
+                ):
+                    response = session.get(
+                        f"https://serviceusage.googleapis.com/v1beta1/projects/{project}/services/{service}/consumerQuotaMetrics",
+                        params={"view": "FULL", "pageSize": 100},
+                        timeout=15,
                     )
+                    response.raise_for_status()
+                    self.limits[key] = (now, response.json())
+                quota = self.limits[key][1]
+                unit = "1/d/{project}" if mode == "day" else "1/min/{project}"
+                limits = [
+                    float(b["effectiveLimit"])
+                    for m in quota.get("metrics", [])
+                    if m["metric"] == metric
+                    for quota_limit in m["consumerQuotaLimits"]
+                    if quota_limit["unit"] == unit
+                    for b in quota_limit["quotaBuckets"]
+                    if not b.get("dimensions")
                 ]
-                if not target:
-                    continue
-                id = "google_" + account["id"].lower() + "_" + domain
-                cfg = {
-                    "id": id,
-                    "name": name,
-                    "builtin_name": True,
-                    "entry_ids": target,
-                    "kind": "rate_limit",
-                    "source": "Google Service Usage + Cloud Monitoring",
-                    "unit": "requests per day"
-                    if mode == "day"
-                    else "requests per minute (reported daily peak)",
-                    "max_age": 600,
-                    "enforce": True,
-                }
-                row = {
-                    "config": cfg,
-                    "provider_note": "Delayed provider measurement; not a billing cap or free character counter",
-                    "project": project,
-                    "reporting": None,
-                }
-                try:
-                    key = (project, service)
-                    if (
-                        key not in self.limits
-                        or (now - self.limits[key][0]).total_seconds() > 3600
-                    ):
-                        response = session.get(
-                            f"https://serviceusage.googleapis.com/v1beta1/projects/{project}/services/{service}/consumerQuotaMetrics",
-                            params={"view": "FULL", "pageSize": 100},
-                            timeout=15,
-                        )
-                        response.raise_for_status()
-                        self.limits[key] = (now, response.json())
-                    quota = self.limits[key][1]
-                    unit = "1/d/{project}" if mode == "day" else "1/min/{project}"
-                    limits = [
-                        float(b["effectiveLimit"])
-                        for m in quota.get("metrics", [])
-                        if m["metric"] == metric
-                        for quota_limit in m["consumerQuotaLimits"]
-                        if quota_limit["unit"] == unit
-                        for b in quota_limit["quotaBuckets"]
-                        if not b.get("dimensions")
-                    ]
-                    if len(limits) != 1 or limits[0] <= 0:
-                        raise ValueError("Ambiguous/unsupported quota")
-                    series = []
-                    page = None
-                    while True:
-                        params = {
-                            "filter": f'metric.type="serviceruntime.googleapis.com/quota/rate/net_usage" AND resource.type="consumer_quota" AND resource.labels.service="{service}"',
-                            "interval.startTime": midnight.astimezone(UTC).isoformat(),
-                            "interval.endTime": now.isoformat(),
-                            "pageSize": 10000,
-                            "view": "FULL",
-                        }
-                        if page:
-                            params["pageToken"] = page
-                        response = session.get(
-                            f"https://monitoring.googleapis.com/v3/projects/{project}/timeSeries",
-                            params=params,
-                            timeout=15,
-                        )
-                        response.raise_for_status()
-                        body = response.json()
-                        series.extend(body.get("timeSeries", []))
-                        page = body.get("nextPageToken")
-                        if not page:
-                            break
-                    used, last = aggregate(series, metric, mode)
-                    row["verified_limit"] = limits[0]
-                    row["last_usage_point"] = last
-                    row["provider_error"] = (
-                        None
-                        if used is not None
-                        else "Google has not reported any usage samples for this day; not assumed zero"
+                if len(limits) != 1 or limits[0] <= 0:
+                    raise ValueError("Ambiguous/unsupported quota")
+                series = []
+                page = None
+                while True:
+                    params = {
+                        "filter": f'metric.type="serviceruntime.googleapis.com/quota/rate/net_usage" AND resource.type="consumer_quota" AND resource.labels.service="{service}"',
+                        "interval.startTime": midnight.astimezone(UTC).isoformat(),
+                        "interval.endTime": now.isoformat(),
+                        "pageSize": 10000,
+                        "view": "FULL",
+                    }
+                    if page:
+                        params["pageToken"] = page
+                    response = session.get(
+                        f"https://monitoring.googleapis.com/v3/projects/{project}/timeSeries",
+                        params=params,
+                        timeout=15,
                     )
-                    if used is None:
-                        row["provider_error"] = None
-                        row["reporting"] = {
-                            "state": "no_activity_reported",
-                            "reported_used": 0,
-                            "checked_at": now.isoformat(),
-                            "period": midnight.date().isoformat()
-                            + " America/Los_Angeles",
-                            "basis": "Successful Cloud Monitoring query returned no usage samples; not a verified zero-use quota measurement",
-                        }
-                    if used is not None:
-                        row["sample"] = {
-                            "used": used,
-                            "limit": limits[0],
-                            "period": midnight.date().isoformat()
-                            + " America/Los_Angeles",
-                            "timestamp": now.isoformat(),
-                        }
-                except Exception as exc:
-                    row["provider_error"] = (
-                        f"Google quota read failed ({type(exc).__name__})"
-                    )
-                results.append(row)
+                    response.raise_for_status()
+                    body = response.json()
+                    series.extend(body.get("timeSeries", []))
+                    page = body.get("nextPageToken")
+                    if not page:
+                        break
+                used, last = aggregate(series, metric, mode)
+                row["verified_limit"] = limits[0]
+                row["last_usage_point"] = last
+                row["provider_error"] = (
+                    None
+                    if used is not None
+                    else "Google has not reported any usage samples for this day; not assumed zero"
+                )
+                if used is None:
+                    row["provider_error"] = None
+                    row["reporting"] = {
+                        "state": "no_activity_reported",
+                        "reported_used": 0,
+                        "checked_at": now.isoformat(),
+                        "period": midnight.date().isoformat() + " America/Los_Angeles",
+                        "basis": "Successful Cloud Monitoring query returned no usage samples; not a verified zero-use quota measurement",
+                    }
+                if used is not None:
+                    row["sample"] = {
+                        "used": used,
+                        "limit": limits[0],
+                        "period": midnight.date().isoformat() + " America/Los_Angeles",
+                        "timestamp": now.isoformat(),
+                    }
+            except Exception as exc:
+                row["provider_error"] = (
+                    f"Google quota read failed ({type(exc).__name__})"
+                )
+            results.append(row)
         return results

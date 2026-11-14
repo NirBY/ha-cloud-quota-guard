@@ -1,7 +1,6 @@
 """Generic, provider-agnostic quota monitoring. Unknown is never safe/zero."""
 
 import asyncio
-import json
 from datetime import timedelta
 
 import voluptuous as vol
@@ -22,7 +21,6 @@ from .provider_policies import policy_for
 from .provider_signals import collect_signals, subscribe
 from .relationships import collect_relationships
 from .source_config import period_timezone, sensor_sample, usage_url
-from .tuya_observer import TuyaObserver
 
 DOMAIN = "quota_guard"
 SCHEMA = vol.Schema(
@@ -49,7 +47,7 @@ SCHEMA = vol.Schema(
         vol.Optional("max_age", default=900): vol.All(
             vol.Coerce(int), vol.Range(min=30, max=86400)
         ),
-        vol.Optional("enforce", default=True): cv.boolean,
+        vol.Optional("enforce", default=False): cv.boolean,
     }
 )
 
@@ -89,7 +87,7 @@ async def async_setup(hass, config):
 
 
 async def async_setup_entry(hass, entry):
-    manager = Guard(hass)
+    manager = Guard(hass, entry)
     hass.data[DOMAIN] = manager
     await manager.load()
     entry.async_on_unload(subscribe(hass, manager))
@@ -104,7 +102,6 @@ async def async_setup_entry(hass, entry):
 async def async_unload_entry(hass, entry):
     ok = await hass.config_entries.async_unload_platforms(entry, ["sensor"])
     if ok:
-        hass.data[DOMAIN].tuya.close()
         hass.data.pop(DOMAIN, None)
     return ok
 
@@ -121,8 +118,9 @@ async def ws_report(hass, connection, msg):
 
 
 class Guard:
-    def __init__(self, hass):
+    def __init__(self, hass, entry=None):
         self.hass = hass
+        self.entry = entry
         self.store = Store(hass, 1, DOMAIN)
         self.data = {"metrics": {}, "events": []}
         self.inventory = []
@@ -130,11 +128,64 @@ class Guard:
         self.lock = asyncio.Lock()
         self.poll_lock = asyncio.Lock()
         self.google = GoogleProvider()
-        self.tuya = TuyaObserver()
         self.relationships = {"available": False, "entries": {}}
 
     async def load(self):
         self.data = await self.store.async_load() or self.data
+        if self.data.get("permissions_version") != 1:
+            needs_setup = False
+            # Old releases inferred targets and defaulted configure to enforcement.
+            # No stored legacy flag establishes explicit administrator consent.
+            for id, metric in list(self.data["metrics"].items()):
+                cfg = metric["config"]
+                needs_setup |= bool(cfg.get("enforce"))
+                cfg["enforce"] = False
+                metric["cutoff_authorized"] = False
+                if cfg.get("builtin_name") or (
+                    id.startswith("github_")
+                    and cfg.get("source") == "https://api.github.com/rate_limit"
+                ):
+                    needs_setup = True
+                    self.retire_metric(id)
+            self.data["permissions_version"] = 1
+            await self.store.async_save(self.data)
+            if needs_setup:
+                persistent_notification.async_create(
+                    self.hass,
+                    self.text(
+                        "Quota Guard updated: add your own GitHub/Google credentials in Configure. The Tuya observer was removed. History is retained; all legacy cutoffs are off until you explicitly map targets and enable cutoff again. Already disabled integrations remain disabled."
+                    ),
+                    title=self.text("Cloud service quotas"),
+                    notification_id="quota_guard_permissions_upgrade",
+                )
+
+    @property
+    def providers(self):
+        """Credentials belong only to this integration's config entry."""
+        return self.entry.data.get("providers", {}) if self.entry else {}
+
+    def retire_metric(self, id):
+        """Keep history without evaluating a disconnected or removed source."""
+        metric = self.data["metrics"].pop(id)
+        metric["config"]["enforce"] = False
+        metric["cutoff_authorized"] = False
+        self.clear_data_alert(id, metric)
+        for kind in ("threshold", "cutoff"):
+            persistent_notification.async_dismiss(self.hass, f"quota_guard_{id}_{kind}")
+        self.data.setdefault("retired_metrics", {})[id] = metric
+
+    async def remove_provider(self, provider_id):
+        # Wait for any in-flight request before removing its metrics/credentials.
+        async with self.poll_lock, self.lock:
+            providers = dict(self.providers)
+            providers.pop(provider_id, None)
+            self.hass.config_entries.async_update_entry(
+                self.entry, data={**self.entry.data, "providers": providers}
+            )
+            for id, metric in list(self.data["metrics"].items()):
+                if metric["config"].get("provider_id") == provider_id:
+                    self.retire_metric(id)
+            await self.store.async_save(self.data)
 
     def snapshot(self):
         return {
@@ -158,7 +209,7 @@ class Guard:
 
     async def configure(self, call):
         cfg = dict(call.data)
-        if cfg.get("enforce", True) and not cfg["entry_ids"]:
+        if cfg.get("enforce", False) and not cfg["entry_ids"]:
             raise vol.Invalid("At least one target integration is required")
         for id in cfg["entry_ids"]:
             e = self.hass.config_entries.async_get_entry(id)
@@ -167,11 +218,6 @@ class Guard:
         async with self.lock:
             old = self.data["metrics"].get(cfg["id"], {})
             old_config = old.get("config", {})
-            if old_config.get("builtin_name") or (
-                cfg["id"].startswith("github_")
-                and old_config.get("source") == "https://api.github.com/rate_limit"
-            ):
-                raise vol.Invalid("Built-in provider sources cannot be overwritten")
             # A changed source must supply a new sample before it can enforce a cutoff.
             measurement_fields = (
                 "source",
@@ -188,7 +234,20 @@ class Guard:
                 "period_mode",
                 "period_timezone",
             )
-            if any(
+            if old_config.get("provider_id"):
+                # Provider measurements are immutable; only explicit target mapping
+                # and cutoff consent can be changed through the admin action.
+                normalized = SCHEMA(
+                    {
+                        str(k): old_config[str(k)]
+                        for k in SCHEMA.schema
+                        if str(k) in old_config
+                    }
+                )
+                if any(cfg.get(k) != normalized.get(k) for k in measurement_fields):
+                    raise vol.Invalid("Provider measurements cannot be overwritten")
+                cfg = {**old_config, **cfg}
+            if not old_config.get("provider_id") and any(
                 old.get("config", {}).get(k) != cfg.get(k) for k in measurement_fields
             ):
                 old = {
@@ -200,6 +259,7 @@ class Guard:
             self.data["metrics"][cfg["id"]] = {
                 **old,
                 "config": cfg,
+                "cutoff_authorized": bool(cfg.get("enforce") and cfg["entry_ids"]),
                 "status": "unknown",
             }
             await self.store.async_save(self.data)
@@ -300,11 +360,6 @@ class Guard:
     async def evaluate_metrics(self):
         """Evaluate locally available samples without querying cloud providers."""
         async with self.lock:
-            for row in self.tuya.collect(
-                self.hass.config_entries.async_entries(), self.data["metrics"]
-            ):
-                id = row["config"]["id"]
-                self.data["metrics"].setdefault(id, {}).update(row)
             await self.inventory_refresh()
             await self.provider_signals_refresh()
             try:
@@ -423,11 +478,11 @@ class Guard:
                             ),
                         )
                 m["last_percent"] = pct
-                if pct >= 95 and cfg["enforce"]:
+                if pct >= 95 and cfg.get("enforce") and m.get("cutoff_authorized"):
                     result = {}
                     for eid in cfg["entry_ids"]:
                         e = self.hass.config_entries.async_get_entry(eid)
-                        if not e:
+                        if not e or e.domain == DOMAIN:
                             result[eid] = "missing"
                             continue
                         if e.disabled_by and e.state.value == "not_loaded":
@@ -464,100 +519,81 @@ class Guard:
         metric.pop("data_alert_message", None)
         metric.pop("data_alert_key", None)
 
+    async def apply_provider_row(self, row):
+        """A poll updates observations, never administrator cutoff choices."""
+        async with self.lock:
+            id = row["config"]["id"]
+            metric = self.data["metrics"].setdefault(id, {})
+            config = metric.get("config", row["config"])
+            if "sample" not in row:
+                metric.pop("sample", None)
+            metric.update(row)
+            metric["config"] = config
+
     async def github_samples(self, now):
-        """Existing GitHub credentials stay in HA; read the provider's real counter."""
-        for entry in self.hass.config_entries.async_entries("github"):
-            token = entry.data.get("access_token")
-            if not token:
+        """Read core usage only with a token supplied to Quota Guard itself."""
+        for provider_id, provider in self.providers.items():
+            if provider["type"] != "github":
                 continue
-            id = "github_" + entry.entry_id.lower() + "_core"
-            metric = self.data["metrics"].setdefault(
-                id,
-                {
-                    "config": {
-                        "id": id,
-                        "name": "GitHub REST — " + entry.title,
-                        "entry_ids": [entry.entry_id],
-                        "kind": "rate_limit",
-                        "source": "https://api.github.com/rate_limit",
-                        "unit": "requests",
-                        "max_age": 180,
-                        "enforce": True,
-                    },
-                    "status": "unknown",
+            id = "qg_github_" + provider_id
+            row = {
+                "config": {
+                    "id": id,
+                    "name": "GitHub REST — " + provider["name"],
+                    "provider_id": provider_id,
+                    "entry_ids": [],
+                    "kind": "rate_limit",
+                    "source": "https://api.github.com/rate_limit",
+                    "unit": "requests",
+                    "max_age": 180,
+                    "enforce": False,
                 },
-            )
+                "status": "unknown",
+            }
             try:
                 async with async_get_clientsession(self.hass).get(
                     "https://api.github.com/rate_limit",
                     headers={
-                        "Authorization": "Bearer " + token,
+                        "Authorization": "Bearer " + provider["access_token"],
                         "Accept": "application/vnd.github+json",
                     },
                     timeout=15,
                 ) as response:
                     response.raise_for_status()
                     data = (await response.json())["resources"]["core"]
-                    # Core response headers are authoritative when provided.
                     limit = response.headers.get("X-RateLimit-Limit", data["limit"])
                     used = response.headers.get("X-RateLimit-Used", data["used"])
                     reset = response.headers.get("X-RateLimit-Reset", data["reset"])
-                metric["sample"] = {
+                row["sample"] = {
                     "used": float(used),
                     "limit": float(limit),
                     "period": str(reset),
                     "timestamp": now.isoformat(),
                 }
-                metric["provider_error"] = None
+                row["provider_error"] = None
             except Exception:
-                metric["provider_error"] = (
-                    "Provider unavailable; previous sample will expire"
+                row["provider_error"] = (
+                    "Provider unavailable; check Quota Guard credentials"
                 )
+            await self.apply_provider_row(row)
 
     async def google_samples(self):
         accounts = [
-            {"id": e.entry_id, "info": e.data["service_account_info"]}
-            for e in self.hass.config_entries.async_entries("google_cloud")
-            if e.data.get("service_account_info")
+            {"id": id, **provider}
+            for id, provider in self.providers.items()
+            if provider["type"] == "google"
         ]
         if not accounts:
             return
-        entries = []
-        for e in self.hass.config_entries.async_entries():
-            if e.domain not in ("google", "google_assistant_sdk", "google_cloud"):
-                continue
-            auth = e.data.get("auth_implementation", "")
-            # Legacy api-project-N service accounts can be matched to OAuth client IDs.
-            project = next(
-                (
-                    json.loads(a["info"])["project_id"]
-                    if isinstance(a["info"], str)
-                    else a["info"]["project_id"]
-                    for a in accounts
-                    if (
-                        json.loads(a["info"])
-                        if isinstance(a["info"], str)
-                        else a["info"]
-                    )["project_id"].removeprefix("api-project-")
-                    in auth
-                ),
-                None,
-            )
-            entries.append(
-                {"entry_id": e.entry_id, "domain": e.domain, "project": project}
-            )
         try:
             results = await self.hass.async_add_executor_job(
-                self.google.fetch, accounts, entries
+                self.google.fetch, accounts
             )
         except Exception:
+            # A malformed saved credential must not prevent local source evaluation.
             return
         for row in results:
-            m = self.data["metrics"].setdefault(row["config"]["id"], {})
-            # Never carry yesterday's data into an empty new provider period.
-            if "sample" not in row:
-                m.pop("sample", None)
-            m.update(row)
+            await self.apply_provider_row(row)
 
     async def provider_signals_refresh(self):
         """Notify once per active provider failure, separately from numeric quotas."""

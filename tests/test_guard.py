@@ -130,6 +130,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.g.github_samples = AsyncMock()
         self.g.google_samples = AsyncMock()
         self.g.data["metrics"]["test"] = {
+            "cutoff_authorized": True,
             "config": {
                 "id": "test",
                 "name": "Test",

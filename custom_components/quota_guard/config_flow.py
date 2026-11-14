@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from uuid import uuid4
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -30,7 +31,195 @@ class OptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         if "quota_guard" not in self.hass.data:
             return self.async_abort(reason="not_loaded")
-        return self.async_show_menu(step_id="init", menu_options=["add", "edit"])
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=[
+                "add",
+                "edit",
+                "github",
+                "google",
+                "remove_provider",
+                "mapping",
+            ],
+        )
+
+    async def async_step_github(self, user_input=None):
+        from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+        errors = {}
+        if user_input is not None:
+            token = user_input["access_token"].strip()
+            try:
+                if not token:
+                    raise ValueError("Missing token")
+                async with async_get_clientsession(self.hass).get(
+                    "https://api.github.com/rate_limit",
+                    headers={"Authorization": "Bearer " + token},
+                    timeout=15,
+                ) as response:
+                    response.raise_for_status()
+            except Exception:
+                errors["base"] = "cannot_connect"
+            else:
+                return self.save_provider(
+                    {
+                        "type": "github",
+                        "name": user_input["name"],
+                        "access_token": token,
+                    }
+                )
+        return self.async_show_form(
+            step_id="github",
+            errors=errors,
+            data_schema=vol.Schema(
+                {
+                    vol.Required("name"): str,
+                    vol.Required("access_token"): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.PASSWORD
+                        )
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_google(self, user_input=None):
+        from .credentials import google_credentials
+        from .google_provider import SERVICES
+
+        errors = {}
+        if user_input is not None:
+            try:
+                services = user_input["services"]
+                if not services or any(service not in SERVICES for service in services):
+                    raise ValueError("Select supported APIs")
+                info = await self.hass.async_add_executor_job(
+                    google_credentials, user_input["service_account_info"]
+                )
+            except (ValueError, KeyError, TypeError):
+                errors["base"] = "invalid_credentials"
+            else:
+                return self.save_provider(
+                    {
+                        "type": "google",
+                        "name": user_input["name"],
+                        "service_account_info": info,
+                        "services": services,
+                    }
+                )
+        return self.async_show_form(
+            step_id="google",
+            errors=errors,
+            data_schema=vol.Schema(
+                {
+                    vol.Required("name"): str,
+                    vol.Required("service_account_info"): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.PASSWORD
+                        )
+                    ),
+                    vol.Required("services"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=list(SERVICES),
+                            multiple=True,
+                            translation_key="google_services",
+                        )
+                    ),
+                }
+            ),
+        )
+
+    def save_provider(self, provider):
+        entry = self.config_entry
+        providers = {**entry.data.get("providers", {}), uuid4().hex[:12]: provider}
+        self.hass.config_entries.async_update_entry(
+            entry, data={**entry.data, "providers": providers}
+        )
+        return self.async_create_entry(title="", data={})
+
+    async def async_step_remove_provider(self, user_input=None):
+        manager = self.hass.data["quota_guard"]
+        if user_input is not None:
+            await manager.remove_provider(user_input["provider_id"])
+            return self.async_create_entry(title="", data={})
+        providers = [
+            {"value": id, "label": provider["name"]}
+            for id, provider in manager.providers.items()
+        ]
+        if not providers:
+            return self.async_abort(reason="no_providers")
+        return self.async_show_form(
+            step_id="remove_provider",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("provider_id"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=providers)
+                    )
+                }
+            ),
+        )
+
+    async def async_step_mapping(self, user_input=None):
+        if user_input is not None:
+            self._source_id = user_input["source_id"]
+            return await self.async_step_cutoff()
+        metrics = self.hass.data["quota_guard"].data["metrics"]
+        if not metrics:
+            return self.async_abort(reason="no_metrics")
+        return self.async_show_form(
+            step_id="mapping",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("source_id"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                {"value": id, "label": metric["config"]["name"]}
+                                for id, metric in metrics.items()
+                            ]
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def async_step_cutoff(self, user_input=None):
+        from . import SCHEMA
+
+        manager = self.hass.data["quota_guard"]
+        current = manager.data["metrics"].get(self._source_id, {}).get("config")
+        if current is None:
+            return self.async_abort(reason="no_metrics")
+        errors = {}
+        if user_input is not None:
+            data = {str(k): current[str(k)] for k in SCHEMA.schema if str(k) in current}
+            data.update(user_input)
+            data["entry_ids"] = user_input.get("entry_ids", [])
+            try:
+                await manager.configure(SimpleNamespace(data=SCHEMA(data)))
+            except vol.Invalid:
+                errors["base"] = "targets_required"
+            else:
+                return self.async_create_entry(title="", data={})
+        targets = [
+            {"value": entry.entry_id, "label": entry.title}
+            for entry in self.hass.config_entries.async_entries()
+            if entry.domain != "quota_guard" and entry.source != "ignore"
+        ]
+        return self.async_show_form(
+            step_id="cutoff",
+            errors=errors,
+            data_schema=vol.Schema(
+                {
+                    vol.Required("enforce", default=False): bool,
+                    vol.Optional(
+                        "entry_ids",
+                        description={"suggested_value": current["entry_ids"]},
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=targets, multiple=True)
+                    ),
+                }
+            ),
+        )
 
     async def async_step_add(self, user_input=None):
         self._source_id = None

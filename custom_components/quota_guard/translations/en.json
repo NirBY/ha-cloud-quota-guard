@@ -127,7 +127,11 @@
         "title": "Manage quota sources",
         "menu_options": {
           "add": "Add sensor source",
-          "edit": "Edit source"
+          "edit": "Edit source",
+          "github": "Connect GitHub",
+          "google": "Connect Google project",
+          "remove_provider": "Remove provider connection",
+          "mapping": "Configure cutoff targets"
         }
       },
       "edit": {
@@ -179,17 +183,59 @@
           "period_mode": "Read a provider period from a sensor, or explicitly select a calendar month derived from the source timestamp.",
           "period_timezone": "Provider timezone for calendar-month periods, for example UTC or Asia/Jerusalem. Samples from an earlier month are not reused."
         }
+      },
+      "github": {
+        "title": "Connect GitHub to Quota Guard",
+        "description": "Enter a token explicitly for Quota Guard. We validate it with GitHub and monitor its REST core quota. No repository permissions are needed for the rate-limit endpoint. This does not read another integration’s token or enable cutoff.",
+        "data": {
+          "name": "Connection name",
+          "access_token": "GitHub token"
+        }
+      },
+      "google": {
+        "title": "Connect a Google project to Quota Guard",
+        "description": "Paste the service-account JSON key as one line and choose the project APIs to monitor. The key is checked locally; provider access is checked during polling. Enable Service Usage and Cloud Monitoring and grant their read permissions in Google Cloud. No other integration’s credentials are read. Cutoff stays off.",
+        "data": {
+          "name": "Connection name",
+          "service_account_info": "Service-account JSON key",
+          "services": "Project APIs"
+        }
+      },
+      "remove_provider": {
+        "title": "Remove a provider connection",
+        "description": "Remove its saved credentials and stop polling. Its measurement history is retained separately. No disabled integration is re-enabled.",
+        "data": {
+          "provider_id": "Connection"
+        }
+      },
+      "mapping": {
+        "title": "Choose a metric for cutoff",
+        "data": {
+          "source_id": "Metric"
+        }
+      },
+      "cutoff": {
+        "title": "Configure automatic cutoff",
+        "description": "Explicitly select the integrations this metric may disable at 95%. Confirm the quota belongs to those integrations. Disabling persists across restarts and period resets. Already disabled integrations are never re-enabled automatically. Leave cutoff off for monitoring only.",
+        "data": {
+          "enforce": "Enable cutoff at 95%",
+          "entry_ids": "Target integrations"
+        }
       }
     },
     "error": {
       "duplicate_id": "This source ID already exists.",
       "sensor_missing": "Choose an existing sensor.",
       "targets_required": "Choose integrations for automatic cutoff.",
-      "invalid_source": "Check the source ID, URL, timezone and measurement settings."
+      "invalid_source": "Check the source ID, URL, timezone and measurement settings.",
+      "cannot_connect": "Could not validate the token with GitHub. Check the token and connection.",
+      "invalid_credentials": "Enter a valid Google service-account JSON key and select APIs."
     },
     "abort": {
       "not_loaded": "Load Cloud Quota Guard before configuring sources.",
-      "no_sources": "No sensor sources to edit. Add a source first."
+      "no_sources": "No sensor sources to edit. Add a source first.",
+      "no_providers": "No provider connections to remove.",
+      "no_metrics": "No active metrics. Add a source or wait for the next provider poll."
     }
   },
   "selector": {
@@ -204,6 +250,13 @@
       "options": {
         "attribute": "From sensor",
         "monthly": "Calendar month"
+      }
+    },
+    "google_services": {
+      "options": {
+        "google": "Google Calendar",
+        "google_cloud": "Google Cloud Text-to-Speech",
+        "google_assistant_sdk": "Google Assistant SDK"
       }
     }
   }
