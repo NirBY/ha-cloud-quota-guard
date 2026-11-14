@@ -106,6 +106,7 @@ class Connection(SourceEntity):
     """Show a saved connection immediately, even before its first API poll."""
 
     _attr_has_entity_name = True
+    _attr_name = "Connection"
     _attr_translation_key = "connection"
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ["pending", "connected", "needs_attention", "removed"]
@@ -151,6 +152,7 @@ class Usage(SourceEntity):
     """One real usage measurement per source; unknown never becomes zero."""
 
     _attr_icon = "mdi:chart-line"
+    _attr_has_entity_name = False
 
     def __init__(self, guard, id):
         super().__init__(guard, id)
@@ -163,7 +165,9 @@ class Usage(SourceEntity):
 
     @property
     def name(self):
-        return self.guard.metric_name(self.metric.get("config", {"name": self.id}))
+        # Keep source labels stable and English by default. User-provided names
+        # remain exactly as entered, independently of HA's system language.
+        return self.metric.get("config", {}).get("name", self.id)
 
     @property
     def native_unit_of_measurement(self):

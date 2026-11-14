@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.2 — 2026-11-14
+
+- Default the dashboard to English even when Home Assistant's profile language is
+  Hebrew. Keep explicit `language: he` and `language: auto` options.
+- Use English default entity labels independently of the system language, preserve
+  user-defined source names, and avoid repeating the provider name in usage entities.
+
 ## 0.8.1 — 2026-11-14
 
 - Show saved GitHub/Google connections as service devices with a connection-status

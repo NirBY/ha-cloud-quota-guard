@@ -18,9 +18,9 @@ test('reference policies are not represented as measured usage or graphed',()=>{
  assert.match(html,/no usage counter/);assert.doesNotMatch(html,/% used/);assert.doesNotMatch(card.detail(row),/<svg/);
 });
 
-test('English fallback, Hebrew auto detection, overrides and custom names',()=>{
+test('English default, explicit Hebrew or auto, overrides and custom names',()=>{
  const card=new Card();assert.equal(card.language,'en');assert.equal(card.t('Daily limit'),'Daily limit');
- card._hass={locale:{language:'he'}};assert.equal(card.language,'he');assert.equal(card.t('Daily limit'),'מגבלה יומית');
+ card._hass={locale:{language:'he'}};assert.equal(card.language,'en');card.setConfig({language:'auto'});assert.equal(card.language,'he');assert.equal(card.t('Daily limit'),'מגבלה יומית');
  card._hass={language:'iw-IL'};assert.equal(card.language,'he');
  card.setConfig({language:'en'});assert.equal(card.language,'en');
  card.setConfig({language:'auto'});card._hass={locale:{language:'fr'}};assert.equal(card.language,'en');
@@ -39,7 +39,7 @@ test('render switches direction and refreshes an already loaded card on profile 
  const card=new Card();card.data={metrics:{},inventory:[],events:[]};card.loaded=true;
  card.shadowRoot={innerHTML:'',querySelector(){return {onclick:null,oninput:null,open:false};},querySelectorAll(){return [];}};
  card.render();assert.match(card.shadowRoot.innerHTML,/direction:ltr/);assert.match(card.shadowRoot.innerHTML,/Cloud quotas and services/);
- card.hass={locale:{language:'he'}};assert.match(card.shadowRoot.innerHTML,/direction:rtl/);assert.match(card.shadowRoot.innerHTML,/מכסות ושירותי ענן/);
+ card.hass={locale:{language:'he'}};assert.match(card.shadowRoot.innerHTML,/direction:ltr/);card.setConfig({language:'auto'});card.hass={locale:{language:'he'}};assert.match(card.shadowRoot.innerHTML,/direction:rtl/);assert.match(card.shadowRoot.innerHTML,/מכסות ושירותי ענן/);
  card.setConfig({language:'en'});assert.match(card.shadowRoot.innerHTML,/direction:ltr/);
 });
 test('unavailable quota data is separate from the integration connection',()=>{

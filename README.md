@@ -11,7 +11,7 @@ Cloud Quota Guard is a **custom Home Assistant integration**, distributed throug
 
 **Unknown is never zero.** A service with no verified quota source is clearly labeled as unknown and is not protected. Disabling a Home Assistant integration is not a provider-side spending cap.
 
-English is the default and fallback language. The dashboard follows your Home Assistant profile language, with Hebrew and right-to-left layout supported. Notifications follow the Home Assistant system language. User-defined service names are preserved.
+English is the dashboard's default and fallback language, including when Home Assistant uses Hebrew. Set `language: he` for Hebrew/right-to-left, or explicitly choose `language: auto` to follow your profile. Native Home Assistant forms follow the profile language. Source entity names default to English; user-defined names are preserved. Notifications follow the Home Assistant system language.
 
 ## Setup help
 
@@ -182,8 +182,8 @@ The integration registers the complete bundled JavaScript module automatically u
 type: custom:quota-guard-card
 ```
 
-Use `language: en` to keep a card in English, `language: he` for Hebrew, or
-`language: auto` (the default) to follow Home Assistant. Other languages fall back
+Use `language: en` (the default) to keep a card in English, `language: he` for Hebrew, or
+`language: auto` to follow Home Assistant. Other languages fall back
 to English. Existing saved events retain their original notification text.
 
 A reusable dashboard template is provided in [examples/dashboard.yaml](examples/dashboard.yaml).
