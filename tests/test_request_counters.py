@@ -138,50 +138,64 @@ class RequestCounterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.session.trace_configs), 0)
         self.assertEqual(list(self.counters.rows()), [])
 
-    async def test_supported_runtime_paths_without_credential_reads(self):
-        self.entry.domain = "mashov"
-        self.entry.runtime_data = None
-        self.hass.data["mashov"] = {
-            "entry": {"client": SimpleNamespace(_session=self.session)}
-        }
-        self.assertEqual(
-            counters_module.sessions_for(self.hass, self.entry), (self.session,)
-        )
+    async def test_domains_never_grant_access_to_private_clients(self):
+        class PublicInterfaceOnly:
+            def __getattr__(self, name):
+                if name == "quota_guard_sessions":
+                    raise AttributeError(name)
+                raise AssertionError("Private runtime attributes must not be inspected")
 
-        self.entry.domain = "life360"
-        self.entry.runtime_data = SimpleNamespace(
-            coordinator=SimpleNamespace(
-                _acct_data={"private account": SimpleNamespace(session=self.session)}
-            )
-        )
-        self.assertEqual(
-            counters_module.sessions_for(self.hass, self.entry), (self.session,)
-        )
-        self.entry.domain = "xiaomi_cloud_map_extractor"
-        self.entry.runtime_data = SimpleNamespace(
-            coordinator=SimpleNamespace(
-                connector=SimpleNamespace(
-                    _cloud_connector=SimpleNamespace(
-                        _session_data=SimpleNamespace(session=self.session)
-                    )
-                )
-            )
-        )
-        self.assertEqual(
-            counters_module.sessions_for(self.hass, self.entry), (self.session,)
-        )
+        class NoHassData:
+            def get(self, *args):
+                raise AssertionError("Other integration data must not be inspected")
 
-    async def test_cached_mashov_is_visible_then_counts_when_its_client_opens(self):
-        self.entry.domain = "mashov"
-        self.entry.runtime_data = None
-        client = SimpleNamespace(_session=None)
-        self.hass.data["mashov"] = {"entry": {"client": client}}
+        self.hass.data = NoHassData()
+        for domain in (
+            "mashov",
+            "life360",
+            "xiaomi_cloud_map_extractor",
+            "meitav_tariff_sync",
+            "unrelated",
+        ):
+            with self.subTest(domain=domain):
+                self.entry.domain = domain
+                self.entry.runtime_data = PublicInterfaceOnly()
+                self.assertIsNone(counters_module.sessions_for(self.entry))
+                self.counters.refresh([self.entry])
+                self.assertEqual(list(self.counters.rows()), [])
+                self.assertEqual(self.session.trace_configs, [])
+
+    async def test_empty_opt_in_is_visible_then_counts_when_its_client_opens(self):
+        self.entry.runtime_data.quota_guard_sessions = ()
         self.counters.refresh([self.entry])
         row = list(self.counters.rows())[0]
         self.assertEqual(row["counter"]["state"], "waiting_for_client")
         self.assertNotIn("sample", row)
         self.assertFalse(row["config"]["enforce"])
-        client._session = self.session
+        self.entry.runtime_data.quota_guard_sessions = (self.session,)
         self.counters.refresh([self.entry])
         await self.get("/ok")
         self.assertEqual(self.used(), 1)
+
+    async def test_withdrawing_opt_in_detaches_and_preserves_history(self):
+        self.counters.refresh([self.entry])
+        await self.get("/ok")
+        del self.entry.runtime_data.quota_guard_sessions
+        self.counters.refresh([self.entry])
+        self.assertEqual(self.session.trace_configs, [])
+        row = list(self.counters.rows())[0]
+        self.assertEqual(row["counter"]["state"], "not_opted_in")
+        self.assertNotIn("sample", row)
+        await self.get("/ok")
+        self.assertEqual(self.data["request_counters"]["entry"]["used"], 1)
+
+    async def test_legacy_counter_without_observations_is_retained_as_paused(self):
+        self.entry.runtime_data = None
+        self.data["metrics"] = {
+            counters_module.metric_id("entry"): {"config": {"automatic_counter": True}}
+        }
+        self.counters.refresh([self.entry])
+        row = list(self.counters.rows())[0]
+        self.assertEqual(row["counter"]["state"], "not_opted_in")
+        self.assertNotIn("sample", row)
+        self.assertEqual(self.session.trace_configs, [])

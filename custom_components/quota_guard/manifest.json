@@ -18,5 +18,5 @@
     "google-auth[requests]==2.62.0",
     "oci==2.191.0"
   ],
-  "version": "0.10.1"
+  "version": "0.11.0"
 }

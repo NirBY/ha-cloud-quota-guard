@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.11.0 — 2026-11-22
+
+- Address the HACS review by removing all domain-specific/private-client request
+  counter paths. Discovery only uses the integration author's explicit
+  `runtime_data.quota_guard_sessions` opt-in interface.
+- Pause earlier automatic counters without that interface, retain their history,
+  and clear current measurements so stale observations cannot trigger cutoff.
+- Update setup guidance, examples and counter status messages to explain opt-in
+  support. Mashov, Life360 and Xiaomi require upstream support or a usage sensor.
+
 ## 0.10.1 — 2026-11-14
 
 - Show supported request counters immediately when their integration starts from

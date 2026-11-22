@@ -1,4 +1,4 @@
-"""Observe supported, integration-owned HTTP sessions without reading credentials.
+"""Observe HTTP sessions explicitly offered by their owning integration.
 
 Only count the aiohttp headers-sent signal: redirects and transport retries are
 separate requests, while a cached result or a failed DNS lookup is not a request
@@ -10,35 +10,15 @@ from hashlib import sha256
 
 from aiohttp import ClientSession, TraceConfig
 
-SUPPORTED = {
-    "mashov": "Mashov",
-    "life360": "Life360",
-    "xiaomi_cloud_map_extractor": "Xiaomi Cloud Map Extractor",
-    "meitav_tariff_sync": "Meitav Tariff Sync",
-}
 
-
-def sessions_for(hass, entry):
-    """Explicit paths only; never walk arbitrary objects or config-entry data."""
+def sessions_for(entry):
+    """Read only the public opt-in interface; None means no permission to attach."""
     runtime = getattr(entry, "runtime_data", None)
     # Opt-in interoperability: integration authors expose ONLY owned sessions.
     advertised = getattr(runtime, "quota_guard_sessions", None)
     if isinstance(advertised, (tuple, list)):
         return advertised
-    if entry.domain == "mashov":
-        client = hass.data.get("mashov", {}).get(entry.entry_id, {}).get("client")
-        return (getattr(client, "_session", None),)
-    if entry.domain == "life360":
-        coordinator = getattr(runtime, "coordinator", None)
-        accounts = getattr(coordinator, "_acct_data", {})
-        return tuple(getattr(account, "session", None) for account in accounts.values())
-    if entry.domain == "xiaomi_cloud_map_extractor":
-        coordinator = getattr(runtime, "coordinator", None)
-        connector = getattr(coordinator, "connector", None)
-        cloud = getattr(connector, "_cloud_connector", None)
-        data = getattr(cloud, "_session_data", None)
-        return (getattr(data, "session", None),)
-    return ()
+    return None
 
 
 def metric_id(entry_id):
@@ -65,6 +45,15 @@ class RequestCounters:
             record.clear()
             record.update(period=period, used=0, first_observed=now.isoformat())
         return record
+
+    def _known_counter(self, entry_id):
+        """Keep earlier observations visible without treating them as consent."""
+        return entry_id in self.data.get("request_counters", {}) or bool(
+            self.data.get("metrics", {})
+            .get(metric_id(entry_id), {})
+            .get("config", {})
+            .get("automatic_counter")
+        )
 
     def _attach(self, session, entry_id):
         trace = TraceConfig()
@@ -102,25 +91,21 @@ class RequestCounters:
         for entry in entries:
             if entry.domain == "quota_guard":
                 continue
-            advertised = isinstance(
-                getattr(
-                    getattr(entry, "runtime_data", None), "quota_guard_sessions", None
-                ),
-                (tuple, list),
-            )
-            if entry.domain not in SUPPORTED and not advertised:
+            advertised = sessions_for(entry)
+            if advertised is None and not self._known_counter(entry.entry_id):
                 continue
             state = "waiting_for_client"
-            if not enabled:
+            if advertised is None:
+                state = "not_opted_in"
+            elif not enabled:
                 state = "off"
             elif entry.disabled_by or entry.state.value != "loaded":
                 state = "integration_not_loaded"
             else:
                 try:
-                    sessions = sessions_for(self.hass, entry)
                     sessions = {
                         session
-                        for session in sessions
+                        for session in advertised
                         if isinstance(session, ClientSession) and not session.closed
                     }
                 except (AttributeError, TypeError):
@@ -140,7 +125,7 @@ class RequestCounters:
                             desired[session] = entry.entry_id
             states[entry.entry_id] = {
                 "domain": entry.domain,
-                "name": SUPPORTED.get(entry.domain, entry.domain),
+                "name": entry.domain.replace("_", " ").title(),
                 "state": state,
             }
         for session, (entry_id, _trace, _active) in list(self.attached.items()):
@@ -163,12 +148,11 @@ class RequestCounters:
         expiry = (now + timedelta(days=1)).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
-        records = self.data.get("request_counters", {})
         for entry_id, state in self.states.items():
-            if (
-                state["state"] not in ("observing", "waiting_for_client")
-                and entry_id not in records
-            ):
+            if state["state"] not in (
+                "observing",
+                "waiting_for_client",
+            ) and not self._known_counter(entry_id):
                 continue  # An unsupported client is never fabricated as zero usage.
             row = {
                 "config": {

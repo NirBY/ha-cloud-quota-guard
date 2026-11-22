@@ -16,9 +16,9 @@ function metric(id,name,used,unit,limit=null,extras={}){
 const metrics={
  demo_github:metric('demo_github','GitHub REST',630,'requests',5000),
  demo_openai:metric('demo_openai','OpenAI — API project',24,'USD',50),
- demo_mashov:metric('demo_mashov','Mashov — HTTP requests today',128,'requests',null,{threshold_mode:'above',warning_value:100,critical_value:200,automatic_counter:true}),
- demo_life360:metric('demo_life360','Life360 — HTTP requests today',47,'requests',null,{automatic_counter:true}),
- demo_xiaomi:metric('demo_xiaomi','Xiaomi Cloud Map Extractor — HTTP requests today',62,'requests',null,{automatic_counter:true}),
+ demo_opt_in:metric('demo_opt_in','Opted-in example — HTTP requests today',128,'requests',null,{threshold_mode:'above',warning_value:100,critical_value:200,automatic_counter:true}),
+ demo_sensor:metric('demo_sensor','Example usage sensor',47,'requests'),
+ demo_report:metric('demo_report','Example reported usage',62,'requests'),
  demo_meitav:metric('demo_meitav','Meitav Tariff Sync — HTTP requests today',2,'requests',null,{automatic_counter:true}),
 };
 for(const m of Object.values(metrics))if(m.config.automatic_counter)m.counter={state:'observing',partial_period:true,first_observed:new Date(now-4*3600000).toISOString()};

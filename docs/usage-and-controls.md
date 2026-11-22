@@ -3,17 +3,21 @@
 ## Automatic request counters
 
 **Configure → Automatic HTTP request counters** is on by default. Quota Guard
-checks for supported integration-owned clients at startup and every 10 seconds.
+checks for the explicit `runtime_data.quota_guard_sessions` opt-in interface at
+startup and every 10 seconds. The global switch does not grant access to another
+integration's private clients; its author must offer owned sessions through that interface.
 New sources and entities appear automatically in the dashboard on its next refresh.
 The same path handles a first installation, new integrations and reloaded clients.
 
 | Integration | Automatic source |
 | --- | --- |
-| Mashov | Its dedicated aiohttp client (verified with 1.2.1) |
-| Life360 | Dedicated account clients, aggregated by integration entry (0.11.0) |
-| Xiaomi Cloud Map Extractor | Dedicated Xiaomi cloud client, including map downloads (v3.0.0-alpha-24) |
-| Meitav Tariff Sync | Its owned-session interface (1.0.2) |
-| Other integrations | An integration-owned session exposed through the interface below; otherwise connect an existing usage sensor |
+| Meitav Tariff Sync | The owned-session interface in the documented 1.0.2 companion update |
+| Any integration explicitly offering the interface | Its advertised owned aiohttp sessions only |
+| Mashov, Life360, Xiaomi Cloud Map Extractor, and others without the interface | No automatic counter; connect an existing usage sensor or request upstream opt-in support |
+
+Starting with v0.11.0, there are no domain-based client paths. Counters created by
+older releases pause if their integration has not opted in. Saved counts and graphs
+remain history; old samples are cleared from current usage and cannot trigger cutoff.
 
 These are **observed HTTP requests sent by this Home Assistant instance**. Redirects
 and HTTP retries count separately, including requests that receive an error.
@@ -44,9 +48,13 @@ and rejects clients advertised by multiple entries. It never replaces global HTT
 methods or reads request contents. Native counters can instead use the existing
 sensor/report source form with explicit timestamps and reporting periods.
 
+An empty tuple/list opts in before the session exists, displaying a waiting state.
+Removing the interface or returning a value other than a tuple/list withdraws
+consent: the observer detaches on the next discovery pass and retains saved history.
+
 This does not automatically support every integration or every HTTP library.
-Integration updates can change client structure; the settings page shows when a
-supported client cannot be found. No usage is fabricated in that case.
+The settings page distinguishes waiting for an opted-in client from an integration
+that has not opted in. No private attributes are inspected and no usage is fabricated.
 
 ## Warning and critical alerts
 

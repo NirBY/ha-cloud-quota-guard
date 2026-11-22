@@ -60,14 +60,22 @@ does not create an automatic account API.
 
 ## Automatic request counters
 
-Supported Mashov, Life360, Xiaomi Cloud Map Extractor and Meitav clients are
-discovered automatically on first install and when added later. No extra API key
-is needed. Counters measure this Home Assistant instance's observed HTTP requests,
-including retries and redirects, and are labelled as partial UTC days. They do
-not reveal provider allowances or billable usage. Other integrations need a
-supported owned-session interface or an existing usage sensor.
+Automatic discovery only observes clients an integration explicitly offers through
+`entry.runtime_data.quota_guard_sessions`. It works on first install and when an
+opted-in integration is added later. Quota Guard does not inspect private client
+attributes or attach counters based on an integration's name.
 
-See [supported versions, gaps, persistence and the author interface](docs/usage-and-controls.md#automatic-request-counters).
+Meitav Tariff Sync 1.0.2 with the documented owned-session interface can opt in.
+Mashov, Life360 and Xiaomi Cloud Map Extractor versions without that interface
+are **not automatically counted**. Connect an existing usage sensor or ask the
+integration's author to expose the interface. Earlier counter history is retained,
+but counters pause when the integration does not opt in.
+
+Counters measure this Home Assistant instance's observed HTTP requests, including
+retries and redirects, and are labelled as partial UTC days. They do not reveal
+provider allowances or billable usage. No extra API key is needed for opted-in clients.
+
+See [the opt-in interface, gaps and persistence](docs/usage-and-controls.md#automatic-request-counters).
 Use **Configure → Warning and critical alerts** to set amounts such as 100 / 200
 requests without a known quota. Automatic cutoff remains off until configured.
 

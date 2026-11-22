@@ -15,6 +15,37 @@ notifications = import_module(guard.__name__ + ".notifications")
 class AmountAlertTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp = test_guard.RuntimeTests.asyncSetUp
 
+    async def test_legacy_counter_cannot_enforce_without_integration_opt_in(self):
+        from quota_guard.request_counters import RequestCounters, metric_id
+
+        self.entry.entry_id = "entry"
+        self.entry.runtime_data = None
+        self.entries.async_entries = lambda: [self.entry]
+        metric = self.g.data["metrics"].pop("test")
+        key = metric_id("entry")
+        metric["config"].update(
+            id=key,
+            automatic_counter=True,
+            threshold_mode="above",
+            warning_value=50,
+            critical_value=75,
+        )
+        metric["counter"] = {"state": "observing"}
+        history = [{"used": 80, "period": "older"}]
+        metric["points"] = history.copy()
+        self.g.data["metrics"][key] = metric
+        self.g.request_counters = RequestCounters(self.g.hass, self.g.data)
+        self.g.event = AsyncMock()
+        await self.g.tick(refresh_providers=False)
+        self.assertEqual(metric["status"], "counter_unavailable")
+        self.assertEqual(metric["counter"]["state"], "not_opted_in")
+        self.assertNotIn("sample", metric)
+        self.assertNotIn("used", metric)
+        self.assertEqual(metric["points"], history)
+        self.assertEqual(self.g.metric_diagnostics(metric), [])
+        self.entries.async_set_disabled_by.assert_not_awaited()
+        self.g.event.assert_not_awaited()
+
     async def test_threshold_jump_alerts_once_even_with_no_limit_and_cutoff_off(self):
         metric = self.g.data["metrics"]["test"]
         metric["config"].update(

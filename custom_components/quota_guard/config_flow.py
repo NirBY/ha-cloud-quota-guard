@@ -80,7 +80,8 @@ class OptionsFlow(
         statuses = manager.request_counters.states if manager.request_counters else {}
         labels = {
             "observing": "Counting HTTP requests",
-            "waiting_for_client": "Waiting for a supported HTTP client",
+            "waiting_for_client": "Waiting for an opted-in HTTP client",
+            "not_opted_in": "Counter paused: integration has not opted in",
             "integration_not_loaded": "Integration is not loaded",
             "shared_client_unsupported": "Shared HTTP client cannot be attributed safely",
             "off": "Off",
@@ -91,7 +92,7 @@ class OptionsFlow(
                 "coverage": "\n".join(
                     f"- {s['name']}: {labels[s['state']]}" for s in statuses.values()
                 )
-                or "No supported HTTP clients are loaded yet."
+                or "No integrations have offered HTTP clients through the opt-in interface."
             },
             data_schema=vol.Schema(
                 {

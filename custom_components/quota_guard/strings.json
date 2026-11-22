@@ -440,9 +440,9 @@
       },
       "request_counters": {
         "title": "Automatic HTTP request counters",
-        "description": "Supported integrations are discovered on first install and checked again every 10 seconds. New counters appear within one minute. This counts observed HTTP requests from this Home Assistant instance, including redirects and retries. Provider quota and billable usage are not inferred. Startup and reload requests may be missed; counts are labelled as partial days and reset at 00:00 UTC.\n\n{coverage}\n\nFor other integrations, connect an existing request sensor or ask its author to expose an owned HTTP session. Automatic cutoff stays off until you explicitly enable it.",
+        "description": "Only integrations that explicitly offer runtime_data.quota_guard_sessions opt in to automatic counting. They are discovered on first install and checked every 10 seconds. Integration names and private client attributes never grant access. New counters appear within one minute. Counts cover this Home Assistant instance's observed HTTP requests, including redirects and retries; provider quota and billable usage are not inferred. Startup and reload requests may be missed; partial days reset at 00:00 UTC.\n\n{coverage}\n\nWithout the opt-in interface, connect an existing usage sensor or ask the integration author to add support. Previous counts remain history and cannot trigger cutoff while paused. Automatic cutoff stays off until explicitly enabled.",
         "data": {
-          "enabled": "Automatically discover supported request counters"
+          "enabled": "Automatically discover opted-in request counters"
         }
       },
       "alerts": {
